@@ -233,26 +233,35 @@ const sha256Hex = async (text) => {
     return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
-const AmnsMark = ({ size = 'md' }) => {
+const AmnsMark = ({ size = 'md', variant = 'light' }) => {
     const sizes = {
-        sm: { box: 'w-9 h-9', stroke: 'text-base', mark: 'text-sm', sub: 'text-[8px]' },
-        md: { box: 'w-14 h-14', stroke: 'text-2xl', mark: 'text-xl', sub: 'text-[10px]' },
-        lg: { box: 'w-20 h-20', stroke: 'text-3xl', mark: 'text-2xl', sub: 'text-xs' },
+        sm: { mark: 'text-xl', sub: 'text-[8px]', gap: 'mt-0' },
+        md: { mark: 'text-3xl', sub: 'text-[9px]', gap: 'mt-1' },
+        lg: { mark: 'text-5xl', sub: 'text-[10px]', gap: 'mt-1.5' },
+        xl: { mark: 'text-6xl', sub: 'text-[11px]', gap: 'mt-2' },
     }[size];
+    const inkClass = variant === 'reverse' ? 'text-white' : 'text-graphite-900';
+    const subClass = variant === 'reverse' ? 'text-graphite-300' : 'text-graphite-500';
     return (
-        <div className="flex items-center gap-3">
-            <div className={`${sizes.box} rounded-xl bg-gradient-to-br from-[#0c2c5c] to-[#1747a6] flex items-center justify-center shadow-md text-white font-black tracking-tight`}>
-                <span className={sizes.mark}>AM</span>
-                <span className="opacity-50 font-light px-0.5">/</span>
-                <span className={sizes.mark}>NS</span>
+        <div className="flex flex-col">
+            <div className={`font-display font-medium leading-none tracking-tight ${inkClass} ${sizes.mark}`}>
+                <span>AM</span>
+                <span className="text-red-600 px-0.5">/</span>
+                <span>NS</span>
             </div>
-            <div className="flex flex-col leading-tight">
-                <span className={`${sizes.stroke} font-serif italic text-[#0c2c5c] font-bold`}>Org Sense</span>
-                <span className={`${sizes.sub} font-bold uppercase tracking-[0.2em] text-slate-500`}>ArcelorMittal Nippon Steel</span>
+            <div className={`${sizes.gap} ${sizes.sub} font-sans font-semibold uppercase tracking-[0.18em] ${subClass}`}>
+                Arcelormittal Nippon Steel India
             </div>
         </div>
     );
 };
+
+// Hero pull-quote in brand voice
+const BrandTagline = ({ className = '' }) => (
+    <h1 className={`font-display font-normal leading-[1.1] text-graphite-900 ${className}`}>
+        Smarter steels, <em className="text-red-600 not-italic font-display italic">brighter futures.</em>
+    </h1>
+);
 
 const LockScreen = ({ onUnlock }) => {
     const [pwd, setPwd] = useState('');
@@ -279,33 +288,62 @@ const LockScreen = ({ onUnlock }) => {
     };
 
     return (
-        <div className="h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-slate-200 p-6">
-            <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border border-slate-200 p-10 flex flex-col items-center">
-                <AmnsMark size="lg" />
-                <div className="h-px w-full bg-slate-100 my-7" />
-                <h2 className="text-lg font-bold text-slate-800 mb-1">Restricted Access</h2>
-                <p className="text-sm text-slate-500 mb-6 text-center">This portal is for authorized AM/NS personnel only. Enter the access password to continue.</p>
-                <form onSubmit={handleSubmit} className="w-full flex flex-col gap-3">
-                    <input
-                        type="password"
-                        autoFocus
-                        autoComplete="off"
-                        value={pwd}
-                        onChange={(e) => { setPwd(e.target.value); setErr(''); }}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center font-mono tracking-wider"
-                        placeholder="Access password"
-                        disabled={busy}
-                    />
-                    {err && <p className="text-red-600 text-sm font-medium text-center" role="alert">{err}</p>}
-                    <button
-                        type="submit"
-                        disabled={busy || !pwd}
-                        className={`w-full py-3 rounded-lg font-bold text-white transition-colors shadow-md ${busy || !pwd ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0c2c5c] hover:bg-[#0a234a] cursor-pointer'}`}
-                    >
-                        {busy ? 'Verifying...' : 'Unlock'}
-                    </button>
-                </form>
-                <p className="text-[10px] text-slate-400 mt-6 text-center leading-relaxed">All processing happens entirely in your browser. No data is sent to any server. Refreshing the page clears all data.</p>
+        <div className="h-screen w-full flex bg-white text-graphite-900 overflow-hidden">
+            {/* LEFT: brand panel */}
+            <div className="hidden md:flex md:w-1/2 lg:w-3/5 bg-graphite-900 text-white flex-col justify-between p-12 lg:p-16 relative overflow-hidden">
+                <div className="relative z-10">
+                    <AmnsMark size="md" variant="reverse" />
+                </div>
+                <div className="relative z-10 max-w-xl">
+                    <p className="font-sans font-semibold text-red-400 text-[11px] uppercase tracking-[0.18em] mb-5">#SmarterSteelsBrighterFutures</p>
+                    <h1 className="font-display font-normal text-5xl lg:text-6xl leading-[1.05] mb-4">
+                        Smarter steels, <em className="text-red-500 not-italic font-display italic">brighter futures.</em>
+                    </h1>
+                    <p className="font-display italic text-graphite-300 text-2xl lg:text-3xl leading-snug">Reimagineering Bharat.</p>
+                </div>
+                <div className="relative z-10 flex items-end justify-between text-graphite-300">
+                    <p className="font-sans text-xs leading-relaxed max-w-xs">
+                        Banaunga main, banega Bharat.<br/>
+                        <span className="text-graphite-400">JV between ArcelorMittal &amp; Nippon Steel — 9 MTPA across India.</span>
+                    </p>
+                    <span className="font-mono text-[10px] text-graphite-400 hidden lg:inline">Org Sense · v1.0</span>
+                </div>
+                <div aria-hidden className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-red-600 opacity-20 blur-3xl" />
+            </div>
+
+            {/* RIGHT: auth panel */}
+            <div className="flex-1 flex flex-col items-center justify-center p-8 lg:p-16 bg-graphite-50">
+                <div className="md:hidden mb-10"><AmnsMark size="md" /></div>
+                <div className="w-full max-w-sm">
+                    <p className="font-sans font-semibold text-red-600 text-[11px] uppercase tracking-[0.18em] mb-3">Restricted access</p>
+                    <h2 className="font-display text-3xl text-graphite-900 mb-3 leading-tight">Sign in to Org Sense.</h2>
+                    <p className="font-sans text-graphite-500 text-[15px] leading-relaxed mb-8">For authorised AM/NS personnel only. Enter the access password issued by the People &amp; Culture team to continue.</p>
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+                        <input
+                            type="password"
+                            autoFocus
+                            autoComplete="off"
+                            value={pwd}
+                            onChange={(e) => { setPwd(e.target.value); setErr(''); }}
+                            className="w-full px-4 py-3 bg-white border border-graphite-200 rounded-brand focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 font-mono tracking-wider text-graphite-900 transition-colors duration-brand-fast"
+                            placeholder="Access password"
+                            disabled={busy}
+                        />
+                        {err && <p className="text-red-700 text-sm font-medium" role="alert">{err}</p>}
+                        <button
+                            type="submit"
+                            disabled={busy || !pwd}
+                            className={`w-full py-3 rounded-brand font-sans font-semibold text-white tracking-wide transition-colors duration-brand-fast inline-flex items-center justify-center gap-2 ${busy || !pwd ? 'bg-graphite-300 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 cursor-pointer'}`}
+                        >
+                            {busy ? 'Verifying…' : <>Unlock <span aria-hidden>→</span></>}
+                        </button>
+                    </form>
+                    <div className="mt-10 pt-6 border-t border-graphite-200">
+                        <p className="font-sans text-[11px] text-graphite-500 leading-relaxed">
+                            <span className="font-semibold text-graphite-700">Privacy.</span> All processing happens in your browser. The file you upload is parsed locally and is never sent to any server. Refreshing or closing this tab clears all data.
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -1672,32 +1710,60 @@ const App = () => {
   if (data.length === 0) {
     const templateHref = `${import.meta.env.BASE_URL}orglens_sample_template.xlsx`;
     return (
-      <div className="h-screen w-full bg-gradient-to-br from-slate-100 via-blue-50 to-slate-200 flex flex-col items-center justify-center p-6">
-        <div className="mb-8"><AmnsMark size="md" /></div>
-        <div className={`max-w-xl w-full bg-white p-10 rounded-2xl shadow-xl border-2 border-dashed transition-colors ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300'}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-          <div className="flex flex-col items-center text-center space-y-4">
-            <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center"><Upload size={40} /></div>
-            <h2 className="text-2xl font-bold text-slate-800">Upload Employee Data</h2>
-            <p className="text-slate-500 text-sm">Drag and drop your Excel (.xlsx) file here, or pick one below.</p>
-            <input type="file" accept=".xlsx, .xls" className="hidden" id="file-upload" disabled={loading} onChange={(e) => e.target.files[0] && handleFileUpload(e.target.files[0])} />
-            <label htmlFor="file-upload" className={`px-6 py-3 text-white font-medium rounded-lg transition-colors shadow-md ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0c2c5c] hover:bg-[#0a234a] cursor-pointer'}`}>
-              {loading ? 'Processing...' : 'Select Excel File'}
-            </label>
-            <a href={templateHref} download="orglens_sample_template.xlsx" className="text-sm text-blue-700 hover:text-blue-900 font-medium underline-offset-2 hover:underline inline-flex items-center gap-1.5">
-              <Upload size={14} className="rotate-180" /> Download sample template
-            </a>
-            <p className="text-xs text-slate-400 max-w-sm">Required columns: <span className="font-mono">Employee id (EID)</span>, <span className="font-mono">Employee name</span>, <span className="font-mono">Line Manager EID</span>. All other columns are optional.</p>
-            <div className="w-full pt-4 mt-2 border-t border-slate-100">
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                    <span className="font-bold text-slate-700">Privacy:</span> all processing happens entirely in your browser. The file you upload is parsed locally and is never sent to any server. Refreshing or closing this tab clears all data.
+      <div className="h-screen w-full bg-graphite-50 flex flex-col">
+        <header className="px-8 py-5 border-b border-graphite-100 bg-white flex items-center justify-between flex-shrink-0">
+            <AmnsMark size="sm" />
+            <span className="font-mono text-[10px] text-graphite-400 hidden md:inline">Org Sense · v1.0</span>
+        </header>
+        <main className="flex-1 overflow-y-auto flex items-center justify-center p-6">
+            <div className="w-full max-w-2xl">
+                <p className="font-sans font-semibold text-red-600 text-[11px] uppercase tracking-[0.18em] mb-3">Step 01 · Upload</p>
+                <h1 className="font-display text-4xl md:text-5xl text-graphite-900 leading-[1.1] mb-3">
+                    Upload your <em className="text-red-600 not-italic font-display italic">organisation file.</em>
+                </h1>
+                <p className="font-sans text-graphite-500 text-[15px] leading-relaxed mb-8 max-w-xl">
+                    Drop in the AM/NS sample template populated with your employee data, or upload any Excel file using the same column headers. Parsing happens locally — nothing leaves your browser.
+                </p>
+
+                <div
+                    className={`bg-white p-10 border ${isDragging ? 'border-red-600 bg-red-50' : 'border-graphite-200'} rounded-brand transition-colors duration-brand-fast`}
+                    onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
+                >
+                    <div className="flex flex-col items-start gap-5">
+                        <div className="w-12 h-12 bg-red-50 text-red-600 rounded-brand flex items-center justify-center border border-red-100"><Upload size={22} /></div>
+                        <div>
+                            <h2 className="font-display text-xl text-graphite-900 mb-1">Drag &amp; drop, or browse</h2>
+                            <p className="font-sans text-sm text-graphite-500">Accepts .xlsx and .xls files.</p>
+                        </div>
+                        <input type="file" accept=".xlsx, .xls" className="hidden" id="file-upload" disabled={loading} onChange={(e) => e.target.files[0] && handleFileUpload(e.target.files[0])} />
+                        <div className="flex flex-wrap items-center gap-3">
+                            <label htmlFor="file-upload" className={`px-5 py-2.5 text-white font-sans font-semibold rounded-brand transition-colors duration-brand-fast inline-flex items-center gap-2 text-sm ${loading ? 'bg-graphite-300 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 cursor-pointer'}`}>
+                                {loading ? 'Processing…' : <>Select Excel file <span aria-hidden>→</span></>}
+                            </label>
+                            <a href={templateHref} download="orglens_sample_template.xlsx" className="px-5 py-2.5 font-sans font-semibold rounded-brand transition-colors duration-brand-fast inline-flex items-center gap-2 text-sm bg-graphite-900 hover:bg-graphite-800 text-white">
+                                Download sample template
+                            </a>
+                        </div>
+                        <div className="w-full pt-4 border-t border-graphite-100">
+                            <p className="font-sans text-[11px] text-graphite-500 leading-relaxed">
+                                <span className="font-mono uppercase tracking-wider text-graphite-700">Required:</span>{' '}
+                                <span className="font-mono">Employee id (EID)</span>,{' '}
+                                <span className="font-mono">Employee name</span>,{' '}
+                                <span className="font-mono">Line Manager EID</span>. Every other column is optional and missing fields are simply hidden in the UI.
+                            </p>
+                        </div>
+                        {warnings && warnings.length > 0 && warnings.map((w, i) => (
+                            <p key={i} className="text-ember text-xs font-sans">{w}</p>
+                        ))}
+                        {error && <p className="text-red-700 text-sm font-sans font-semibold">{error}</p>}
+                    </div>
+                </div>
+
+                <p className="font-sans text-[11px] text-graphite-500 mt-6 leading-relaxed max-w-xl">
+                    <span className="font-semibold text-graphite-700">Privacy.</span> All processing happens in your browser. The file you upload is parsed locally and is never sent to any server. Refreshing or closing this tab clears all data.
                 </p>
             </div>
-            {warnings && warnings.length > 0 && warnings.map((w, i) => (
-                <p key={i} className="text-amber-600 text-xs mt-3 font-medium">{w}</p>
-            ))}
-            {error && <p className="text-red-500 text-sm mt-4 font-medium">{error}</p>}
-          </div>
-        </div>
+        </main>
       </div>
     );
   }
@@ -1735,41 +1801,41 @@ const App = () => {
 
       {/* MAIN APPLICATION (Hidden during print) */}
       <div className={`flex-col h-screen w-full overflow-hidden ${printNodeId ? 'hidden' : 'flex'} print:hidden`}>
-          <header className="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm z-30 flex-shrink-0">
+          <header className="bg-white border-b border-graphite-100 px-6 py-4 flex items-center justify-between shadow-sm z-30 flex-shrink-0">
             <div className="flex items-center w-1/3">
               <AmnsMark size="sm" />
             </div>
-            <div className="flex bg-slate-50 p-1 rounded-lg border border-slate-200 w-fit mx-auto justify-center">
-                <button onClick={() => { setAppTab('org'); setActiveCohortScale(null); }} className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all flex items-center gap-1.5 ${appTab === 'org' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Structure</button>
-                <button onClick={() => { setAppTab('table'); setActiveCohortScale(null); }} className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all flex items-center gap-1.5 ${appTab === 'table' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Table</button>
-                <button onClick={() => { setAppTab('compare'); }} className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all flex items-center gap-1.5 ${appTab === 'compare' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><BarChart2 size={14} /> Compare</button>
+            <div className="flex bg-graphite-50 p-1 rounded-brand border border-graphite-100 w-fit mx-auto justify-center">
+                <button onClick={() => { setAppTab('org'); setActiveCohortScale(null); }} className={`px-4 py-1.5 rounded-brand text-sm font-sans font-semibold transition-all flex items-center gap-1.5 ${appTab === 'org' ? 'bg-white text-red-600 shadow-sm' : 'text-graphite-500 hover:text-graphite-800'}`}>Structure</button>
+                <button onClick={() => { setAppTab('table'); setActiveCohortScale(null); }} className={`px-4 py-1.5 rounded-brand text-sm font-sans font-semibold transition-all flex items-center gap-1.5 ${appTab === 'table' ? 'bg-white text-red-600 shadow-sm' : 'text-graphite-500 hover:text-graphite-800'}`}>Table</button>
+                <button onClick={() => { setAppTab('compare'); }} className={`px-4 py-1.5 rounded-brand text-sm font-sans font-semibold transition-all flex items-center gap-1.5 ${appTab === 'compare' ? 'bg-white text-red-600 shadow-sm' : 'text-graphite-500 hover:text-graphite-800'}`}><BarChart2 size={14} /> Compare</button>
             </div>
             <div className="flex items-center justify-end space-x-4 w-1/3">
               {(appTab === 'org' || appTab === 'table') && (
                   <>
                       <div className="relative w-64 hidden md:block" ref={searchRef}>
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                        <input 
-                            type="text" 
-                            placeholder="Search employee..." 
-                            className="w-full pl-10 pr-4 py-1.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 text-sm" 
-                            value={searchQuery} 
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-graphite-400" size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search employee..."
+                            className="w-full pl-10 pr-4 py-1.5 border border-graphite-200 rounded-brand focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 bg-graphite-50 text-sm transition-colors duration-brand-fast"
+                            value={searchQuery}
                             onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }}
-                            onFocus={() => setIsSearchOpen(true)} 
+                            onFocus={() => setIsSearchOpen(true)}
                         />
                         {isSearchOpen && searchQuery && (
-                          <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border overflow-hidden z-50">
+                          <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-brand shadow-xl border border-graphite-100 overflow-hidden z-50">
                             {filteredSearch.length > 0 ? filteredSearch.map(emp => (
-                                <button key={emp._id} className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b last:border-0 flex flex-col" onClick={() => { handleEmployeeSelect(emp._id); setSearchQuery(''); setIsSearchOpen(false); }}>
-                                  <span className="font-semibold text-slate-800">{emp._formattedName}</span>
-                                  <span className="text-xs text-slate-500">{[emp.jobTitle, emp.function1 || emp.location].filter(Boolean).join(' • ')}</span>
+                                <button key={emp._id} className="w-full text-left px-4 py-3 hover:bg-graphite-50 border-b border-graphite-100 last:border-0 flex flex-col" onClick={() => { handleEmployeeSelect(emp._id); setSearchQuery(''); setIsSearchOpen(false); }}>
+                                  <span className="font-sans font-semibold text-graphite-900">{emp._formattedName}</span>
+                                  <span className="text-xs text-graphite-500">{[emp.jobTitle, emp.function1 || emp.location].filter(Boolean).join(' • ')}</span>
                                 </button>
-                              )) : <div className="px-4 py-3 text-slate-500 text-sm">No employees found.</div>}
+                              )) : <div className="px-4 py-3 text-graphite-500 text-sm">No employees found.</div>}
                           </div>
                         )}
                       </div>
                       {ceoId && filterConditions.length === 0 && (
-                        <button onClick={() => handleEmployeeSelect(ceoId)} className="px-4 py-1.5 bg-slate-50 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors text-sm border border-slate-200 whitespace-nowrap">Go to Top</button>
+                        <button onClick={() => handleEmployeeSelect(ceoId)} className="px-4 py-1.5 bg-graphite-900 hover:bg-graphite-800 text-white rounded-brand font-sans font-semibold transition-colors duration-brand-fast text-sm whitespace-nowrap">Go to Top</button>
                       )}
                   </>
               )}

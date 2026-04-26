@@ -5,10 +5,14 @@
 /* 1. Migrate the <body> and #root styling from the HTML file */
 @layer base {
   body {
-    @apply bg-slate-50 font-sans text-slate-800 m-0 p-0 h-screen w-screen overflow-hidden;
+    @apply bg-graphite-50 font-sans text-graphite-900 m-0 p-0 h-screen w-screen overflow-hidden;
   }
   #root {
     @apply h-full w-full;
+  }
+  /* Brand display & typographic defaults */
+  .font-display {
+    font-feature-settings: "ss01", "ss02";
   }
 }
 
