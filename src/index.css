@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 1. Migrate the <body> and #root styling from the HTML file */
+@layer base {
+  body {
+    @apply bg-slate-50 font-sans text-slate-800 m-0 p-0 h-screen w-screen overflow-hidden;
+  }
+  #root {
+    @apply h-full w-full;
+  }
+}
+
+/* 2. Migrate the custom animations */
+@layer utilities {
+  .animate-fade-in-down {
+    animation: fadeInDown 0.4s ease-out forwards;
+  }
+  .animate-fade-in-up {
+    animation: fadeInUp 0.4s ease-out forwards;
+  }
+  .animate-scale-in {
+    animation: scaleIn 0.15s ease-out forwards;
+  }
+}
+
+/* 3. The Keyframes */
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
