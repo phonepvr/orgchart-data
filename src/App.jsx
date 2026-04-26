@@ -220,12 +220,12 @@ const normalizeRow = (row) => {
 };
 
 // --- Access Gate ---
-// SHA-256 of the access password. Default: "amns2024".
+// SHA-256 of the access password. Default: "amns2026".
 // To change: run `node -e "crypto.createHash('sha256').update('NEWPASS').digest('hex')"`
 // and replace this constant. NOTE: this is client-side obfuscation, not real
 // authentication — anyone with devtools can read the source. Use it to gate the
 // public Pages URL from casual visitors, not to protect sensitive data.
-const ACCESS_HASH = 'da5c36dcc1e8a8ea30ec0339e60deff2a081ff5c9768b44c499f2a6eba33481f';
+const ACCESS_HASH = 'bc321ef4abcfa473576619373b465dd491e5bced3b34b0b22dd1d54786b46f58';
 
 const sha256Hex = async (text) => {
     const buf = new TextEncoder().encode(text);
