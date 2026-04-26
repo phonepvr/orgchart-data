@@ -219,6 +219,98 @@ const normalizeRow = (row) => {
     };
 };
 
+// --- Access Gate ---
+// SHA-256 of the access password. Default: "amns2024".
+// To change: run `node -e "crypto.createHash('sha256').update('NEWPASS').digest('hex')"`
+// and replace this constant. NOTE: this is client-side obfuscation, not real
+// authentication — anyone with devtools can read the source. Use it to gate the
+// public Pages URL from casual visitors, not to protect sensitive data.
+const ACCESS_HASH = 'da5c36dcc1e8a8ea30ec0339e60deff2a081ff5c9768b44c499f2a6eba33481f';
+
+const sha256Hex = async (text) => {
+    const buf = new TextEncoder().encode(text);
+    const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
+const AmnsMark = ({ size = 'md' }) => {
+    const sizes = {
+        sm: { box: 'w-9 h-9', stroke: 'text-base', mark: 'text-sm', sub: 'text-[8px]' },
+        md: { box: 'w-14 h-14', stroke: 'text-2xl', mark: 'text-xl', sub: 'text-[10px]' },
+        lg: { box: 'w-20 h-20', stroke: 'text-3xl', mark: 'text-2xl', sub: 'text-xs' },
+    }[size];
+    return (
+        <div className="flex items-center gap-3">
+            <div className={`${sizes.box} rounded-xl bg-gradient-to-br from-[#0c2c5c] to-[#1747a6] flex items-center justify-center shadow-md text-white font-black tracking-tight`}>
+                <span className={sizes.mark}>AM</span>
+                <span className="opacity-50 font-light px-0.5">/</span>
+                <span className={sizes.mark}>NS</span>
+            </div>
+            <div className="flex flex-col leading-tight">
+                <span className={`${sizes.stroke} font-serif italic text-[#0c2c5c] font-bold`}>Org Sense</span>
+                <span className={`${sizes.sub} font-bold uppercase tracking-[0.2em] text-slate-500`}>ArcelorMittal Nippon Steel</span>
+            </div>
+        </div>
+    );
+};
+
+const LockScreen = ({ onUnlock }) => {
+    const [pwd, setPwd] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState('');
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!pwd) return;
+        setBusy(true); setErr('');
+        try {
+            const hash = await sha256Hex(pwd);
+            if (hash === ACCESS_HASH) {
+                onUnlock();
+            } else {
+                setErr('Incorrect password.');
+                setPwd('');
+            }
+        } catch (ex) {
+            setErr('Password check failed: ' + ex.message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-slate-200 p-6">
+            <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border border-slate-200 p-10 flex flex-col items-center">
+                <AmnsMark size="lg" />
+                <div className="h-px w-full bg-slate-100 my-7" />
+                <h2 className="text-lg font-bold text-slate-800 mb-1">Restricted Access</h2>
+                <p className="text-sm text-slate-500 mb-6 text-center">This portal is for authorized AM/NS personnel only. Enter the access password to continue.</p>
+                <form onSubmit={handleSubmit} className="w-full flex flex-col gap-3">
+                    <input
+                        type="password"
+                        autoFocus
+                        autoComplete="off"
+                        value={pwd}
+                        onChange={(e) => { setPwd(e.target.value); setErr(''); }}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center font-mono tracking-wider"
+                        placeholder="Access password"
+                        disabled={busy}
+                    />
+                    {err && <p className="text-red-600 text-sm font-medium text-center" role="alert">{err}</p>}
+                    <button
+                        type="submit"
+                        disabled={busy || !pwd}
+                        className={`w-full py-3 rounded-lg font-bold text-white transition-colors shadow-md ${busy || !pwd ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0c2c5c] hover:bg-[#0a234a] cursor-pointer'}`}
+                    >
+                        {busy ? 'Verifying...' : 'Unlock'}
+                    </button>
+                </form>
+                <p className="text-[10px] text-slate-400 mt-6 text-center leading-relaxed">All processing happens entirely in your browser. No data is sent to any server. Refreshing the page clears all data.</p>
+            </div>
+        </div>
+    );
+};
+
 // --- Filter Field Definitions (module scope) ---
 const FILTER_FIELD_MAP = {
     'Level': 'level',
@@ -249,6 +341,8 @@ const Avatar = ({ employee, size = 48, ringClass = '', textClass = 'text-white',
                     src={employee.photoUrl}
                     alt={employee.name}
                     className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                    crossOrigin="anonymous"
                     onError={() => setErrored(true)}
                 />
             ) : (
@@ -1044,6 +1138,7 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
 
 // --- App Entry Point ---
 const App = () => {
+  const [unlocked, setUnlocked] = useState(false);
   const [appTab, setAppTab] = useState('org'); // 'org', 'table', 'compare'
   const [data, setData] = useState([]);
   const [employeeMap, setEmployeeMap] = useState({});
@@ -1570,19 +1665,33 @@ const App = () => {
   }, [tabularSortedData]);
 
   // --- RENDER ---
+  if (!unlocked) {
+    return <LockScreen onUnlock={() => setUnlocked(true)} />;
+  }
+
   if (data.length === 0) {
+    const templateHref = `${import.meta.env.BASE_URL}orglens_sample_template.xlsx`;
     return (
-      <div className="h-screen w-full bg-slate-100 flex items-center justify-center p-6">
+      <div className="h-screen w-full bg-gradient-to-br from-slate-100 via-blue-50 to-slate-200 flex flex-col items-center justify-center p-6">
+        <div className="mb-8"><AmnsMark size="md" /></div>
         <div className={`max-w-xl w-full bg-white p-10 rounded-2xl shadow-xl border-2 border-dashed transition-colors ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300'}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="flex flex-col items-center text-center space-y-4">
             <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center"><Upload size={40} /></div>
             <h2 className="text-2xl font-bold text-slate-800">Upload Employee Data</h2>
-            <p className="text-slate-500 text-sm">Drag and drop your Excel (.xlsx) file here.<br/>Ensure it contains standard employee details.</p>
+            <p className="text-slate-500 text-sm">Drag and drop your Excel (.xlsx) file here, or pick one below.</p>
             <input type="file" accept=".xlsx, .xls" className="hidden" id="file-upload" disabled={loading} onChange={(e) => e.target.files[0] && handleFileUpload(e.target.files[0])} />
-            <label htmlFor="file-upload" className={`px-6 py-3 text-white font-medium rounded-lg transition-colors shadow-md ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'}`}>
+            <label htmlFor="file-upload" className={`px-6 py-3 text-white font-medium rounded-lg transition-colors shadow-md ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0c2c5c] hover:bg-[#0a234a] cursor-pointer'}`}>
               {loading ? 'Processing...' : 'Select Excel File'}
             </label>
-            <p className="text-xs text-slate-400">Required columns: Employee id (EID), Employee name, Line Manager EID. See <span className="font-mono">orglens_sample_template.xlsx</span> for the full schema.</p>
+            <a href={templateHref} download="orglens_sample_template.xlsx" className="text-sm text-blue-700 hover:text-blue-900 font-medium underline-offset-2 hover:underline inline-flex items-center gap-1.5">
+              <Upload size={14} className="rotate-180" /> Download sample template
+            </a>
+            <p className="text-xs text-slate-400 max-w-sm">Required columns: <span className="font-mono">Employee id (EID)</span>, <span className="font-mono">Employee name</span>, <span className="font-mono">Line Manager EID</span>. All other columns are optional.</p>
+            <div className="w-full pt-4 mt-2 border-t border-slate-100">
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                    <span className="font-bold text-slate-700">Privacy:</span> all processing happens entirely in your browser. The file you upload is parsed locally and is never sent to any server. Refreshing or closing this tab clears all data.
+                </p>
+            </div>
             {warnings && warnings.length > 0 && warnings.map((w, i) => (
                 <p key={i} className="text-amber-600 text-xs mt-3 font-medium">{w}</p>
             ))}
@@ -1627,9 +1736,8 @@ const App = () => {
       {/* MAIN APPLICATION (Hidden during print) */}
       <div className={`flex-col h-screen w-full overflow-hidden ${printNodeId ? 'hidden' : 'flex'} print:hidden`}>
           <header className="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm z-30 flex-shrink-0">
-            <div className="flex items-center space-x-3 w-1/3">
-              <div className="bg-blue-600 p-2 rounded-lg"><Users className="text-white" size={24} /></div>
-              <h1 className="text-2xl font-serif italic text-blue-800 tracking-tight hidden sm:block font-bold">Org Sense</h1>
+            <div className="flex items-center w-1/3">
+              <AmnsMark size="sm" />
             </div>
             <div className="flex bg-slate-50 p-1 rounded-lg border border-slate-200 w-fit mx-auto justify-center">
                 <button onClick={() => { setAppTab('org'); setActiveCohortScale(null); }} className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all flex items-center gap-1.5 ${appTab === 'org' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Structure</button>
