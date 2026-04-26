@@ -1,6 +1,19 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Search, Info, Users, User, MapPin, Building2, Clock, CalendarDays, Award, ChevronDown, ChevronRight, ChevronLeft, X, Filter, Plus, Trash2, ArrowUp, ArrowDown, BarChart2, Printer } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { Upload, Search, Info, Users, User, MapPin, Building2, Clock, CalendarDays, Award, ChevronDown, ChevronRight, ChevronLeft, X, Filter, Plus, Trash2, ArrowUp, ArrowDown, BarChart2, Printer, Mail } from 'lucide-react';
+
+// --- Template Schema ---
+const REQUIRED_COLUMNS = ['Employee id (EID)', 'Employee name', 'Line Manager EID'];
+const RECOMMENDED_COLUMNS = [
+    'Line Manager Name', 'Job Title', 'Level', 'Employee Class',
+    'Function 1', 'Function/Plant', 'Location Name', 'Asset', 'Cluster',
+    'Gender', 'Date of Birth', 'HR Manager Name', 'HR Manager EID', 'Management Board EID'
+];
+const OPTIONAL_COLUMNS = [
+    'Date of Joining', 'Date in Role', 'Date Promoted', 'Manager Since',
+    'Email', 'Photo URL', 'Matrix Manager EID(s)', 'Cohort Tags'
+];
 
 // --- Format Helpers ---
 const formatNum = (num) => (num === 0 || num === '0' || !num) ? '-' : num;
@@ -27,56 +40,34 @@ const formatJobTitle = (title) => {
         .trim();
 };
 
-const processGrade = (gradeStr) => {
-    let grade = String(gradeStr || '').split('-')[0].trim() || 'Unspecified';
-    const gradeUp = grade.toUpperCase();
-    if (['CMT', 'MT', 'GET', 'OT'].includes(gradeUp) || gradeUp.includes('TRAINEE')) return 'Trainee (CMT / MT / GET / OT)';
-    if (gradeUp === 'DEPUTY GENERAL MANAGER') return 'DGM';
-    if (gradeUp === 'DEPUTY MANAGER') return 'DM';
-    return grade;
+const splitSemicolonList = (v) => {
+    if (v === undefined || v === null || v === '') return [];
+    return String(v).split(';').map(s => s.trim()).filter(Boolean);
 };
 
-const formatCardGrade = (gradeStr) => {
-    let grade = String(gradeStr || '').split('-')[0].trim() || 'Unspecified';
-    const gradeUp = grade.toUpperCase();
-    if (gradeUp === 'DEPUTY GENERAL MANAGER') return 'DGM';
-    if (gradeUp === 'DEPUTY MANAGER') return 'DM';
-    return grade;
+const buildInitials = (name) => {
+    return String(name || '?').split(/\s+/).filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase();
 };
 
-const gradeOrder = [
-    'MD', 'ED', 'SVP', 'VP', 'GM', 'DGM', 
-    'M3', 'M2', 'GMR', 'DM', 'M1', 
-    'Trainee (CMT / MT / GET / OT)', 'Corporate', 'Executive'
-];
-
-const getRank = (grade) => {
-    const idx = gradeOrder.findIndex(g => g.toLowerCase() === grade.toLowerCase());
-    return idx === -1 ? 999 : idx; 
-};
-
-const getEmpSortRank = (emp, ceoId) => {
-    if (!emp) return 999;
-    if (emp._id === ceoId) return -1;
-    const rank = getRank(emp._summaryGrade);
-    if (rank === 0) return 1.5; 
-    return rank;
+const deriveAge = (dob) => {
+    if (!dob || !(dob instanceof Date) || isNaN(dob.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+    return age >= 0 && age < 120 ? age : null;
 };
 
 const sortEmployees = (a, b, ceoId) => {
-    const rankA = getEmpSortRank(a, ceoId);
-    const rankB = getEmpSortRank(b, ceoId);
-    if (rankA !== rankB) return rankA - rankB;
-    
-    const exA = a._isExCom ? 1 : 0;
-    const exB = b._isExCom ? 1 : 0;
-    if (exA !== exB) return exB - exA;
-    
-    const opA = a._isOpCom ? 1 : 0;
-    const opB = b._isOpCom ? 1 : 0;
-    if (opA !== opB) return opB - opA;
-    
-    return (b._insights?.totalTeam || 0) - (a._insights?.totalTeam || 0);
+    if (a._id === ceoId) return -1;
+    if (b._id === ceoId) return 1;
+    const mcA = a._isMgmtCommittee ? 1 : 0;
+    const mcB = b._isMgmtCommittee ? 1 : 0;
+    if (mcA !== mcB) return mcB - mcA;
+    const teamA = a._insights?.totalTeam || 0;
+    const teamB = b._insights?.totalTeam || 0;
+    if (teamA !== teamB) return teamB - teamA;
+    return (a._formattedName || '').localeCompare(b._formattedName || '');
 };
 
 const getMedian = (arr) => {
@@ -90,12 +81,7 @@ const renderGradesList = (gradesObj) => {
     if (!gradesObj) return <div className="p-2 text-slate-500 italic">No data</div>;
     const entries = Object.entries(gradesObj);
     if(entries.length === 0) return <div className="p-2 text-slate-500 italic">No data</div>;
-    const sorted = entries.sort((a, b) => {
-        const rankA = getRank(a[0]);
-        const rankB = getRank(b[0]);
-        if (rankA !== rankB) return rankA - rankB;
-        return b[1] - a[1]; 
-    });
+    const sorted = entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     return (
         <div className="flex flex-col space-y-1">
             {sorted.map(([g, c]) => (
@@ -158,11 +144,6 @@ const parseExcelDate = (excelDate) => {
     return isNaN(fallbackDate.getTime()) ? null : fallbackDate;
 };
 
-const formatDateUI = (dateObj) => {
-    if (!dateObj) return '-';
-    return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-};
-
 const formatDuration = (start, end) => {
     if (!start) return '-';
     let s = start;
@@ -178,31 +159,103 @@ const formatDuration = (start, end) => {
 
 const isEA = (e) => {
     if (!e) return false;
-    const title = String(e['Job Title'] || '').toLowerCase();
+    const title = String(e.jobTitle || '').toLowerCase();
     return title.includes('executive assistant') || title.includes('executive secretary') || title.includes('confidential secretary');
 };
 
 const TenureDisplay = ({ employee }) => {
-    const groupStr = employee._tenureFormatted;
-    if (employee._isDiffTenure) {
-        const orgStr = employee._orgTenureFormatted;
-        let displayOrg = orgStr;
-        
-        if (orgStr.endsWith(' yrs') && groupStr.endsWith(' yrs')) {
-            displayOrg = orgStr.replace(' yrs', '');
-        } else if (orgStr.endsWith(' mos') && groupStr.endsWith(' mos')) {
-            displayOrg = orgStr.replace(' mos', '');
-        }
-        
-        return (
-            <span className="flex items-center gap-0.5">
-                <span title="Org Tenure">{displayOrg}</span>
-                <span className="text-slate-400 px-0.5">/</span>
-                <span title="Group Tenure">{groupStr}</span>
-            </span>
-        );
-    }
+    if (!employee._tenureFormatted) return <span className="text-slate-400">-</span>;
     return <span title="Tenure">{employee._tenureFormatted}</span>;
+};
+
+// --- Template Header Validation ---
+const validateHeaders = (rawRows) => {
+    if (!rawRows || rawRows.length === 0) {
+        return { ok: false, missingRequired: [...REQUIRED_COLUMNS], missingRecommended: [], missingOptional: [] };
+    }
+    const headers = Object.keys(rawRows[0]);
+    const has = (col) => headers.includes(col);
+    return {
+        ok: REQUIRED_COLUMNS.every(has),
+        missingRequired: REQUIRED_COLUMNS.filter(c => !has(c)),
+        missingRecommended: RECOMMENDED_COLUMNS.filter(c => !has(c)),
+        missingOptional: OPTIONAL_COLUMNS.filter(c => !has(c)),
+    };
+};
+
+// --- Row Normalizer ---
+const normalizeRow = (row) => {
+    const get = (key) => {
+        const val = row[key];
+        if (val === undefined || val === null) return '';
+        return typeof val === 'string' ? val.trim() : String(val).trim();
+    };
+    return {
+        eid: get('Employee id (EID)'),
+        name: get('Employee name'),
+        managerEid: get('Line Manager EID'),
+        managerName: get('Line Manager Name'),
+        jobTitle: formatJobTitle(get('Job Title')),
+        level: get('Level'),
+        employeeClass: get('Employee Class'),
+        function1: get('Function 1'),
+        functionPlant: get('Function/Plant'),
+        location: get('Location Name'),
+        asset: get('Asset'),
+        cluster: get('Cluster'),
+        gender: get('Gender'),
+        dob: parseExcelDate(row['Date of Birth']),
+        hrManagerName: get('HR Manager Name'),
+        hrManagerEid: get('HR Manager EID'),
+        mgmtBoardEid: get('Management Board EID'),
+        dateOfJoining: parseExcelDate(row['Date of Joining']),
+        dateInRole: parseExcelDate(row['Date in Role']),
+        datePromoted: parseExcelDate(row['Date Promoted']),
+        managerSince: parseExcelDate(row['Manager Since']),
+        email: get('Email'),
+        photoUrl: get('Photo URL'),
+        matrixEids: splitSemicolonList(get('Matrix Manager EID(s)')),
+        cohortTags: splitSemicolonList(get('Cohort Tags')),
+    };
+};
+
+// --- Filter Field Definitions (module scope) ---
+const FILTER_FIELD_MAP = {
+    'Level': 'level',
+    'Function 1': 'function1',
+    'Function/Plant': 'functionPlant',
+    'Location': 'location',
+    'Asset': 'asset',
+    'Cluster': 'cluster',
+    'Employee Class': 'employeeClass',
+    'Gender': 'gender',
+};
+const MULTI_SELECT_FIELDS = [...Object.keys(FILTER_FIELD_MAP), 'Cohort Tag', 'Mgmt Committee'];
+const NUMERIC_FIELDS = ['DR Size', 'Total Reportees', 'Team Size'];
+
+// --- Avatar with photo + initials fallback ---
+const Avatar = ({ employee, size = 48, ringClass = '', textClass = 'text-white', bgClass = 'bg-slate-700' }) => {
+    const [errored, setErrored] = useState(false);
+    const initials = employee._initials || buildInitials(employee.name);
+    const dim = `${size}px`;
+    const showImg = employee.photoUrl && !errored;
+    return (
+        <div
+            className={`rounded-full flex-shrink-0 flex items-center justify-center font-bold shadow-sm overflow-hidden ${ringClass} ${showImg ? 'bg-slate-100' : `${bgClass} ${textClass}`}`}
+            style={{ width: dim, height: dim }}
+        >
+            {showImg ? (
+                <img
+                    src={employee.photoUrl}
+                    alt={employee.name}
+                    className="w-full h-full object-cover"
+                    onError={() => setErrored(true)}
+                />
+            ) : (
+                <span>{initials}</span>
+            )}
+        </div>
+    );
 };
 
 // --- Shared Display Components ---
@@ -278,49 +331,26 @@ const SortableHeader = ({ label, field, align = 'left', width = '', sortConfigs,
     );
 };
 
-const renderManagerRows = (nodes, depth = 0) => {
-    if (!nodes || nodes.length === 0) return null;
-    return nodes.map((node, i) => (
-        <React.Fragment key={`${node.id || i}-${depth}`}>
-            <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                <td className="py-2 pl-6">
-                    {node.children && node.children.length > 0 && (
-                        <button className="p-1 rounded hover:bg-slate-200 text-slate-500 transition-colors">
-                            <ChevronRight size={14} />
-                        </button>
-                    )}
-                </td>
-                <td className="px-6 py-2 font-medium text-slate-800" style={{ paddingLeft: `${depth * 1.5 + 1.5}rem` }}>{node.name || 'Unknown'}</td>
-                <td className="px-6 py-2 text-slate-600 text-xs">{node.department || '-'}</td>
-                <td className="px-6 py-2 text-center text-slate-700 font-bold">{node.teamSize || 0}</td>
-                <td className="px-6 py-2 text-center text-orange-600 font-bold">{node.directAttrition || 0}</td>
-                <td className="px-6 py-2 text-center text-red-600 font-bold">{node.totalAttrition || 0}</td>
-            </tr>
-            {renderManagerRows(node.children, depth + 1)}
-        </React.Fragment>
-    ));
-};
-
 // --- Print Layout Components ---
 const PrintTile = ({ employee, isMatrix, isLineManager, targetLocation }) => {
-    const showLocation = isLineManager && employee['Location Name'] && employee['Location Name'] !== targetLocation;
+    const showLocation = isLineManager && employee.location && employee.location !== targetLocation;
     const matrixCount = employee._insights?.matrixCount || 0;
     const directCount = employee._insights?.directCount || 0;
     const eaCount = employee._insights?.eaCount || 0;
     const hasAny = !isLineManager && (matrixCount > 0 || directCount > 0 || eaCount > 0);
     const widthClass = isLineManager ? 'w-[220px] max-w-[220px]' : 'w-[160px] max-w-[160px]';
-    
+
     return (
         <div className={`p-2 border ${isMatrix ? 'border-2 border-dashed border-slate-400' : 'border border-solid border-slate-400'} bg-white rounded flex flex-col text-slate-800 break-inside-avoid shadow-sm ${widthClass}`}>
             <div className="flex justify-between items-start gap-1 mb-0.5">
                 <div className="font-bold text-[11px] leading-tight truncate pr-1">{employee._formattedName}</div>
-                <div className="text-[9px] font-bold px-1 rounded border border-slate-300 whitespace-nowrap flex-shrink-0 bg-slate-50">{employee._summaryGrade}</div>
+                {employee.level && <div className="text-[9px] font-bold px-1 rounded border border-slate-300 whitespace-nowrap flex-shrink-0 bg-slate-50">{employee.level}</div>}
             </div>
-            
-            <div className="text-[9px] text-slate-600 truncate">{employee['Job Title'] || 'No Title'}</div>
-            
+
+            <div className="text-[9px] text-slate-600 truncate">{employee.jobTitle || ''}</div>
+
             {showLocation && (
-                <div className="text-[8px] text-slate-500 mt-0.5">{employee['Location Name']}</div>
+                <div className="text-[8px] text-slate-500 mt-0.5">{employee.location}</div>
             )}
             
             {hasAny && (
@@ -337,12 +367,7 @@ const PrintGradeList = ({ gradesObj }) => {
     if (!gradesObj) return null;
     const entries = Object.entries(gradesObj);
     if(entries.length === 0) return null;
-    const sorted = entries.sort((a, b) => {
-        const rankA = getRank(a[0]);
-        const rankB = getRank(b[0]);
-        if (rankA !== rankB) return rankA - rankB;
-        return b[1] - a[1]; 
-    });
+    const sorted = entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     return (
         <div className="flex flex-col gap-y-0.5 text-[10px]">
             {sorted.map(([g, c]) => (
@@ -411,18 +436,20 @@ const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
                                 {manager && (
                                     <>
                                         <div className="text-[8px] font-bold uppercase text-slate-400 mb-1 tracking-widest">Line Manager</div>
-                                        <PrintTile employee={manager} isLineManager targetLocation={emp['Location Name']} />
+                                        <PrintTile employee={manager} isLineManager targetLocation={emp.location} />
                                         <div className="w-px h-6 bg-slate-300 my-1"></div>
                                     </>
                                 )}
-                                
+
                                 <div className="w-full border-2 border-slate-800 rounded p-3 bg-white mb-6 shadow-sm">
                                     <div className="flex justify-between items-start gap-1 mb-1">
                                         <div className="font-black text-base leading-tight truncate">{emp._formattedName}</div>
-                                        <div className="text-[10px] font-bold px-1.5 py-0.5 border border-slate-400 rounded whitespace-nowrap bg-slate-50">{emp._summaryGrade}</div>
+                                        {emp.level && <div className="text-[10px] font-bold px-1.5 py-0.5 border border-slate-400 rounded whitespace-nowrap bg-slate-50">{emp.level}</div>}
                                     </div>
-                                    <div className="text-[11px] text-slate-700 font-medium mb-1.5 truncate">{emp['Job Title']}</div>
-                                    <div className="text-[9px] text-slate-500 mb-2.5">{emp['Department (Label)']} • {emp['Location Name']}</div>
+                                    <div className="text-[11px] text-slate-700 font-medium mb-1.5 truncate">{emp.jobTitle}</div>
+                                    {(emp.function1 || emp.location) && (
+                                        <div className="text-[9px] text-slate-500 mb-2.5">{[emp.function1, emp.location].filter(Boolean).join(' • ')}</div>
+                                    )}
                                     
                                     {(emp._insights?.matrixCount > 0 || emp._insights?.directCount > 0 || emp._insights?.eaCount > 0) && (
                                         <div className="flex justify-between mt-2 pt-2 border-t border-slate-300 text-[10px] font-bold">
@@ -471,12 +498,7 @@ const ColoredGradeList = ({ gradesObj, textClass }) => {
     if (!gradesObj || Object.keys(gradesObj).length === 0) {
         return <div className="text-[10px] text-slate-400 italic">None</div>;
     }
-    const sorted = Object.entries(gradesObj).sort((a, b) => {
-        const rankA = getRank(a[0]);
-        const rankB = getRank(b[0]);
-        if (rankA !== rankB) return rankA - rankB;
-        return b[1] - a[1]; 
-    });
+    const sorted = Object.entries(gradesObj).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     return (
         <div className="flex flex-col gap-y-1 text-[10px]">
             {sorted.map(([g, c]) => (
@@ -493,9 +515,9 @@ const CompareReporteeTile = ({ employee, isMatrix }) => (
     <div className={`p-3 border bg-white rounded-xl flex flex-col text-slate-800 break-inside-avoid w-full shadow-sm ${isMatrix ? 'border-2 border-dashed border-purple-300 bg-purple-50/50' : 'border-solid border-slate-200'}`}>
         <div className="flex justify-between items-start gap-1 mb-1">
             <div className="font-bold text-xs leading-tight truncate pr-1">{employee._formattedName}</div>
-            <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap flex-shrink-0 ${isMatrix ? 'bg-white border-purple-200 text-purple-700' : 'bg-slate-50 border-slate-300 text-slate-700'}`}>{employee._summaryGrade}</div>
+            {employee.level && <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap flex-shrink-0 ${isMatrix ? 'bg-white border-purple-200 text-purple-700' : 'bg-slate-50 border-slate-300 text-slate-700'}`}>{employee.level}</div>}
         </div>
-        <div className="text-[11px] text-slate-500 truncate font-medium">{employee['Job Title'] || 'No Title'}</div>
+        <div className="text-[11px] text-slate-500 truncate font-medium">{employee.jobTitle || ''}</div>
     </div>
 );
 
@@ -555,12 +577,11 @@ const CompareView = ({ compareList, employeeMap, ceoId }) => {
                              <div key={`header-${emp._id}`} className={`w-[320px] bg-white rounded-xl shadow-md border-t-4 ${activeColorObj.border} border-x border-b border-slate-200 p-4 relative`}>
                                  <div className="flex justify-between items-start gap-2 mb-1">
                                      <div className="font-bold text-slate-800 text-lg leading-tight truncate">{emp._formattedName}</div>
-                                     {emp._cardGrade && emp._cardGrade !== 'Unspecified' && <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold border border-slate-200 shadow-sm flex-shrink-0">{emp._cardGrade}</span>}
+                                     {emp.level && <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold border border-slate-200 shadow-sm flex-shrink-0">{emp.level}</span>}
                                  </div>
-                                 <div className="text-sm text-slate-600 font-medium mb-1.5 truncate">{emp['Job Title']}</div>
-                                 <div className="text-[10px] text-slate-500 flex items-center gap-1 font-medium"><MapPin size={10}/>{emp['Location Name']}</div>
-                                 {emp._isExCom && <span className="absolute -top-1.5 -right-1 bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-amber-200">ExCom</span>}
-                                 {emp._isOpCom && <span className="absolute -top-1.5 -right-1 bg-indigo-100 text-indigo-700 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-indigo-200">OpCom</span>}
+                                 <div className="text-sm text-slate-600 font-medium mb-1.5 truncate">{emp.jobTitle}</div>
+                                 {emp.location && <div className="text-[10px] text-slate-500 flex items-center gap-1 font-medium"><MapPin size={10}/>{emp.location}</div>}
+                                 {emp._isMgmtCommittee && <span className="absolute -top-1.5 -right-1 bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-amber-200">MC</span>}
                                  
                                  {(() => {
                                      const insights = emp._insights || {};
@@ -618,41 +639,20 @@ const CompareView = ({ compareList, employeeMap, ceoId }) => {
                         <div className="flex gap-6 mt-4 mb-6">
                            {emps.map(emp => (
                                <div key={`ind-${emp._id}`} className="w-[320px] bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                                   <div className="grid grid-cols-2 gap-4 text-xs mb-2">
+                                   <div className="grid grid-cols-2 gap-4 text-xs">
                                        <div><span className="text-slate-400 block">Total Tenure</span><span className="font-bold text-slate-700"><TenureDisplay employee={emp}/></span></div>
-                                       <div><span className="text-slate-400 block">Time in Role</span><span className="font-bold text-slate-700">{emp._timeInRoleFormatted}</span></div>
-                                       <div><span className="text-slate-400 block">Since Promoted</span><span className="font-bold text-green-700">{emp._lastPromotionFormatted}</span></div>
-                                       <div><span className="text-slate-400 block">With Manager</span><span className="font-bold text-indigo-700">{emp._timeWithManagerFormatted}</span></div>
+                                       <div><span className="text-slate-400 block">Time in Role</span><span className="font-bold text-slate-700">{emp._timeInRoleFormatted || '-'}</span></div>
+                                       <div><span className="text-slate-400 block">Since Promoted</span><span className={`font-bold ${emp._lastPromotionFormatted ? 'text-green-700' : 'text-slate-400'}`}>{emp._lastPromotionFormatted || '-'}</span></div>
+                                       <div><span className="text-slate-400 block">With Manager</span><span className={`font-bold ${emp._timeWithManagerFormatted ? 'text-indigo-700' : 'text-slate-400'}`}>{emp._timeWithManagerFormatted || '-'}</span></div>
+                                       {emp._age != null && (<div><span className="text-slate-400 block">Age</span><span className="font-bold text-slate-700">{emp._age}</span></div>)}
+                                       {emp.gender && (<div><span className="text-slate-400 block">Gender</span><span className="font-bold text-slate-700">{emp.gender}</span></div>)}
                                    </div>
-                                   
-                                   {emp._timeline && emp._timeline.length > 0 && (
-                                       <div className="mt-5 border-t border-slate-100 pt-4">
-                                           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">Role History</div>
-                                           <div className="relative ml-3 space-y-0 pb-1">
-                                               {emp._timeline.map((item, i) => {
-                                                   if (item.isGap) return (<div key={i} className="relative pl-7 py-3"><div className="absolute left-0 top-0 bottom-0 w-px border-l-2 border-dashed border-slate-300"></div><div className="text-xs italic text-slate-500 flex items-center bg-white relative z-10 py-1 -ml-3 pl-3">Data Unavailable <span className="mx-2">•</span> {item.duration} gap</div></div>);
-                                                   let dotColor = 'bg-slate-400 ring-white';
-                                                   if (item.type === 'promotion') dotColor = 'bg-green-500 ring-white';
-                                                   else if (item.type === 'transfer') dotColor = 'bg-blue-500 ring-white';
-                                                   else if (item.type === 'hire') dotColor = 'bg-purple-500 ring-white';
-                                                   else if (item.type === 'company_transfer') dotColor = 'bg-orange-500 ring-white';
-                                                   const showLocation = emp._hasLocationTransfer && item.location && item.location !== employee['Location Name'];
-                                                   return (
-                                                       <div key={i} className="relative pl-7 pb-5">
-                                                           {i !== emp._timeline.length - 1 && <div className="absolute left-0 top-2 bottom-0 w-px bg-slate-200 -ml-[1px]"></div>}
-                                                           <div className={`absolute -left-[6px] top-1.5 h-3 w-3 rounded-full ring-[3px] ${dotColor} z-10`}></div>
-                                                           <div className="text-sm font-bold text-slate-800 leading-tight flex flex-wrap gap-2 items-center">
-                                                               <span>{item.title || 'Unknown Title'}</span>
-                                                               {item.grade && item.grade !== 'Unspecified' && <span className="text-slate-500 font-normal border border-slate-200 px-1.5 rounded text-[10px] bg-slate-50">{item.grade}</span>}
-                                                           </div>
-                                                           <div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-3 flex-wrap">
-                                                               <span className="flex items-center"><Clock size={10} className="mr-1.5"/> {item.durationFormatted}</span>
-                                                               {showLocation && <span className="flex items-center text-blue-600 font-medium"><MapPin size={10} className="mr-1.5"/> {item.location}</span>}
-                                                           </div>
-                                                       </div>
-                                                   );
-                                               })}
-                                           </div>
+
+                                   {emp.cohortTags && emp.cohortTags.length > 0 && (
+                                       <div className="mt-4 flex flex-wrap gap-1.5">
+                                           {emp.cohortTags.map(t => (
+                                               <span key={t} className="text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 rounded-full px-2 py-0.5">{t}</span>
+                                           ))}
                                        </div>
                                    )}
                                </div>
@@ -721,9 +721,8 @@ const CompareView = ({ compareList, employeeMap, ceoId }) => {
 
 function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, viewMode, onClick, onSelectDirect, onSelectMatrix, onContextMenu }) {
   const [showTooltip, setShowTooltip] = useState(false);
-  const [showTimeline, setShowTimeline] = useState(false);
-  
-  const [gradeTooltip, setGradeTooltip] = useState(null); 
+
+  const [gradeTooltip, setGradeTooltip] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
   
   const hideTimeout = useRef(null);
@@ -824,17 +823,10 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
     <div id={isActive ? "active-employee-card" : undefined} className={`relative flex justify-center w-full ${isActive ? 'z-10' : 'z-0'}`}>
       <div className={cardClasses} onClick={!isActive ? onClick : undefined} onContextMenu={(e) => onContextMenu && onContextMenu(e, employee)}>
         
-        {employee._isExCom && (
-            <div className="absolute top-0 right-10 z-20 drop-shadow-sm" title="Executive Committee">
+        {employee._isMgmtCommittee && (
+            <div className="absolute top-0 right-10 z-20 drop-shadow-sm" title="Management Committee">
                 <div className="bg-amber-100 text-amber-700 text-xs font-bold px-2 pt-1 pb-2.5 border-x border-b border-amber-200" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%)' }}>
-                    Ex
-                </div>
-            </div>
-        )}
-        {employee._isOpCom && (
-            <div className="absolute top-0 right-10 z-20 drop-shadow-sm" title="Operations Committee">
-                <div className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 pt-1 pb-2.5 border-x border-b border-indigo-200" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%)' }}>
-                    Op
+                    MC
                 </div>
             </div>
         )}
@@ -844,28 +836,36 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
         </div>
 
         <div className="flex items-center space-x-3 mb-3 pr-6">
-          <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold shadow-sm ${isActive ? 'bg-blue-600' : isMatrixNode ? 'bg-purple-500' : 'bg-slate-700'}`}>
-            {employee._initials}
-          </div>
+          <Avatar employee={employee} size={48} bgClass={isActive ? 'bg-blue-600' : isMatrixNode ? 'bg-purple-500' : 'bg-slate-700'} />
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-slate-800 truncate text-sm" title={employee['Display Name']}>{employee._formattedName}</h3>
-            <p className="text-xs text-slate-500 truncate mt-0.5" title={employee['Job Title']}>{employee['Job Title'] || 'No Title'}</p>
+            <h3 className="font-bold text-slate-800 truncate text-sm" title={employee.name}>{employee._formattedName}</h3>
+            <p className="text-xs text-slate-500 truncate mt-0.5" title={employee.jobTitle}>{employee.jobTitle || ''}</p>
           </div>
         </div>
-        
+
         <div className="text-xs text-slate-600 bg-slate-50 p-2 rounded-md flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-1 truncate pr-2"><Building2 size={12} className="flex-shrink-0"/> <span className="truncate">{employee['Department (Label)'] || 'N/A'}</span></div>
-              {employee._cardGrade && employee._cardGrade !== 'Unspecified' && (
-                  <div className="flex items-center space-x-1 text-slate-500 font-bold whitespace-nowrap" title={employee._cardGrade}>
-                      <Award size={12} className="flex-shrink-0"/> <span>{employee._cardGrade}</span>
-                  </div>
-              )}
-          </div>
-          <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-1 truncate pr-2"><MapPin size={12} className="flex-shrink-0"/> <span className="truncate">{employee['Location Name'] || 'N/A'}</span></div>
-              <div className="flex items-center space-x-1 text-slate-500 flex-shrink-0 font-medium"><Clock size={12} /> <TenureDisplay employee={employee} /></div>
-          </div>
+          {(employee.function1 || employee.level) && (
+              <div className="flex items-center justify-between">
+                  {employee.function1 ? (
+                      <div className="flex items-center space-x-1 truncate pr-2"><Building2 size={12} className="flex-shrink-0"/> <span className="truncate">{employee.function1}</span></div>
+                  ) : <span/>}
+                  {employee.level && (
+                      <div className="flex items-center space-x-1 text-slate-500 font-bold whitespace-nowrap" title={employee.level}>
+                          <Award size={12} className="flex-shrink-0"/> <span>{employee.level}</span>
+                      </div>
+                  )}
+              </div>
+          )}
+          {(employee.location || employee._tenureFormatted) && (
+              <div className="flex items-center justify-between">
+                  {employee.location ? (
+                      <div className="flex items-center space-x-1 truncate pr-2"><MapPin size={12} className="flex-shrink-0"/> <span className="truncate">{employee.location}</span></div>
+                  ) : <span/>}
+                  {employee._tenureFormatted && (
+                      <div className="flex items-center space-x-1 text-slate-500 flex-shrink-0 font-medium"><Clock size={12} /> <TenureDisplay employee={employee} /></div>
+                  )}
+              </div>
+          )}
         </div>
 
         {isIndividualContributor ? (
@@ -921,42 +921,51 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
             <div>
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 pb-1 border-b border-slate-100">Individual Context</h4>
                 <div className="grid grid-cols-2 gap-3 text-sm mb-4">
-                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center"><span className="text-slate-400 font-medium mb-1 text-xs">Total Tenure</span><span className="font-bold text-slate-700 flex items-center"><CalendarDays size={14} className="mr-1.5"/> <TenureDisplay employee={employee} /></span></div>
-                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center"><span className="text-slate-400 font-medium mb-1 text-xs">Time in Role</span><span className="font-bold text-slate-700 flex items-center"><Clock size={14} className="mr-1.5"/> {employee._timeInRoleFormatted}</span></div>
-                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center"><span className="text-slate-400 font-medium mb-1 text-xs">Since Promoted</span><span className={`font-bold flex items-center ${employee._lastPromotionFormatted !== '-' ? 'text-green-700' : 'text-slate-400'}`}><Clock size={14} className="mr-1.5"/> {employee._lastPromotionFormatted}</span></div>
-                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center"><span className="text-slate-400 font-medium mb-1 text-xs">With Manager</span><span className="font-bold text-indigo-700 flex items-center"><Users size={14} className="mr-1.5"/> {employee._timeWithManagerFormatted}</span></div>
+                    {employee._tenureFormatted && (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center"><span className="text-slate-400 font-medium mb-1 text-xs">Total Tenure</span><span className="font-bold text-slate-700 flex items-center"><CalendarDays size={14} className="mr-1.5"/> <TenureDisplay employee={employee} /></span></div>
+                    )}
+                    {employee._timeInRoleFormatted && (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center"><span className="text-slate-400 font-medium mb-1 text-xs">Time in Role</span><span className="font-bold text-slate-700 flex items-center"><Clock size={14} className="mr-1.5"/> {employee._timeInRoleFormatted}</span></div>
+                    )}
+                    {employee._lastPromotionFormatted && (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center"><span className="text-slate-400 font-medium mb-1 text-xs">Since Promoted</span><span className="font-bold text-green-700 flex items-center"><Clock size={14} className="mr-1.5"/> {employee._lastPromotionFormatted}</span></div>
+                    )}
+                    {employee._timeWithManagerFormatted && (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center"><span className="text-slate-400 font-medium mb-1 text-xs">With Manager</span><span className="font-bold text-indigo-700 flex items-center"><Users size={14} className="mr-1.5"/> {employee._timeWithManagerFormatted}</span></div>
+                    )}
+                    {employee._age != null && (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center"><span className="text-slate-400 font-medium mb-1 text-xs">Age</span><span className="font-bold text-slate-700">{employee._age}</span></div>
+                    )}
+                    {employee.gender && (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center"><span className="text-slate-400 font-medium mb-1 text-xs">Gender</span><span className="font-bold text-slate-700">{employee.gender}</span></div>
+                    )}
                 </div>
 
-                {employee._timeline && employee._timeline.length > 0 && (
-                    <div className="mb-2 mt-4 pt-4 border-t border-slate-100">
-                        <button className="text-sm text-blue-600 hover:text-blue-700 flex items-center font-bold w-full focus:outline-none transition-colors" onClick={(e) => { e.stopPropagation(); setShowTimeline(!showTimeline); }}>
-                            {showTimeline ? 'Hide Role History' : 'View Role History'}
-                        </button>
-                        {showTimeline && (
-                            <div className="mt-4 relative ml-3 space-y-0 pb-1">
-                                {employee._timeline.map((item, i) => {
-                                    if (item.isGap) return (<div key={i} className="relative pl-7 py-3"><div className="absolute left-0 top-0 bottom-0 w-px border-l-2 border-dashed border-slate-300"></div><div className="text-xs italic text-slate-50 flex items-center bg-white relative z-10 py-1 -ml-3 pl-3">Data Unavailable <span className="mx-2">•</span> {item.duration} gap</div></div>);
-                                    let dotColor = 'bg-slate-400 ring-white';
-                                    if (item.type === 'promotion') dotColor = 'bg-green-500 ring-white';
-                                    else if (item.type === 'transfer') dotColor = 'bg-blue-500 ring-white';
-                                    else if (item.type === 'hire') dotColor = 'bg-purple-500 ring-white';
-                                    else if (item.type === 'company_transfer') dotColor = 'bg-orange-500 ring-white';
-                                    const showLocation = employee._hasLocationTransfer && item.location && item.location !== employee['Location Name'];
-                                    return (
-                                        <div key={i} className="relative pl-7 pb-5">
-                                            {i !== employee._timeline.length - 1 && <div className="absolute left-0 top-2 bottom-0 w-px bg-slate-200 -ml-[1px]"></div>}
-                                            <div className={`absolute -left-[6px] top-1.5 h-3 w-3 rounded-full ring-[3px] ${dotColor} z-10`}></div>
-                                            <div className="text-sm font-bold text-slate-800 leading-tight flex flex-wrap gap-2 items-center">
-                                                <span>{item.title || 'Unknown Title'}</span>
-                                                {item.grade && item.grade !== 'Unspecified' && <span className="text-slate-500 font-normal border border-slate-200 px-1.5 rounded text-[10px] bg-slate-50">{item.grade}</span>}
-                                            </div>
-                                            <div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-3 flex-wrap">
-                                                <span className="flex items-center"><Clock size={10} className="mr-1.5"/> {item.durationFormatted}</span>
-                                                {showLocation && <span className="flex items-center text-blue-600 font-medium"><MapPin size={10} className="mr-1.5"/> {item.location}</span>}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                {(employee.email || employee.hrManagerName || (employee.cohortTags && employee.cohortTags.length > 0) || employee.employeeClass || employee.functionPlant || employee.asset || employee.cluster) && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-1.5 text-xs">
+                        {employee.email && (
+                            <div className="flex items-center gap-2"><Mail size={12} className="text-slate-400 flex-shrink-0"/><a href={`mailto:${employee.email}`} className="text-blue-600 hover:underline truncate">{employee.email}</a></div>
+                        )}
+                        {employee.hrManagerName && (
+                            <div className="flex items-center gap-2"><User size={12} className="text-slate-400 flex-shrink-0"/><span className="text-slate-500">HR Manager:</span><span className="font-semibold text-slate-700 truncate">{employee.hrManagerName}</span></div>
+                        )}
+                        {employee.employeeClass && (
+                            <div className="flex items-center gap-2"><span className="text-slate-500">Class:</span><span className="font-semibold text-slate-700">{employee.employeeClass}</span></div>
+                        )}
+                        {employee.functionPlant && (
+                            <div className="flex items-center gap-2"><span className="text-slate-500">Function/Plant:</span><span className="font-semibold text-slate-700 truncate">{employee.functionPlant}</span></div>
+                        )}
+                        {employee.asset && (
+                            <div className="flex items-center gap-2"><span className="text-slate-500">Asset:</span><span className="font-semibold text-slate-700 truncate">{employee.asset}</span></div>
+                        )}
+                        {employee.cluster && (
+                            <div className="flex items-center gap-2"><span className="text-slate-500">Cluster:</span><span className="font-semibold text-slate-700 truncate">{employee.cluster}</span></div>
+                        )}
+                        {employee.cohortTags && employee.cohortTags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                                {employee.cohortTags.map(t => (
+                                    <span key={t} className="text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 rounded-full px-2 py-0.5">{t}</span>
+                                ))}
                             </div>
                         )}
                     </div>
@@ -973,27 +982,14 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
               <div className="mt-4">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 pb-1 border-b border-slate-100">Organizational Context</h4>
                 
-                {!isTopNode && employee._isExCom && globalMetrics.exCom && (
-                    <BenchmarkBox title="ExCom Benchmark" borderColor="border-amber-200" titleColor="text-amber-600" bgClass="bg-amber-50/20">
-                        <MetricScale label="Direct Reports" min={globalMetrics.exCom.drMin} max={globalMetrics.exCom.drMax} median={globalMetrics.exCom.drMedian} value={insights.directCount} />
-                        <MetricScale label="Total Team Size" min={globalMetrics.exCom.teamMin} max={globalMetrics.exCom.teamMax} median={globalMetrics.exCom.teamMedian} value={insights.totalTeam} />
-                        {insights.pctOfManagerTeam !== undefined && insights.managerValidDrCount > 0 && (() => {
-                            const expected = 100 / insights.managerValidDrCount;
-                            let shareColor = "text-slate-700";
-                            if (insights.pctOfManagerTeam <= expected * 0.92) shareColor = "text-red-600";
-                            else if (insights.pctOfManagerTeam >= expected * 1.18) shareColor = "text-green-600";
-                            else shareColor = "text-blue-600";
-                            return (
-                                <div className="mt-4 p-3 rounded-lg border border-slate-200 bg-slate-50 flex justify-between items-center">
-                                    <span className="text-sm font-bold text-slate-600">Share of Manager's Team</span>
-                                    <span className={`font-bold text-xl leading-tight ${shareColor}`}>{insights.pctOfManagerTeam}%</span>
-                                </div>
-                            );
-                        })()}
+                {!isTopNode && employee._isMgmtCommittee && globalMetrics.mgmtCommittee && globalMetrics.mgmtCommittee.count > 0 && (
+                    <BenchmarkBox title="MC Benchmark" borderColor="border-amber-200" titleColor="text-amber-600" bgClass="bg-amber-50/20">
+                        <MetricScale label="Direct Reports" min={globalMetrics.mgmtCommittee.drMin} max={globalMetrics.mgmtCommittee.drMax} median={globalMetrics.mgmtCommittee.drMedian} value={insights.directCount} />
+                        <MetricScale label="Total Team Size" min={globalMetrics.mgmtCommittee.teamMin} max={globalMetrics.mgmtCommittee.teamMax} median={globalMetrics.mgmtCommittee.teamMedian} value={insights.totalTeam} />
                     </BenchmarkBox>
                 )}
-                
-                {!isTopNode && !employee._isExCom && (
+
+                {!isTopNode && !employee._isMgmtCommittee && (
                     <>
                         {insights.peerMedianDirects !== undefined && (
                             <BenchmarkBox title="Peer Benchmark">
@@ -1013,23 +1009,17 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
                                 })()}
                             </BenchmarkBox>
                         )}
-                        {employee._isOpCom && globalMetrics.opCom && (
-                            <BenchmarkBox title="OpCom Benchmark" borderColor="border-indigo-200" titleColor="text-indigo-600" bgClass="bg-indigo-50/20">
-                                <MetricScale label="Direct Reports" min={globalMetrics.opCom.drMin} max={globalMetrics.opCom.drMax} median={globalMetrics.opCom.drMedian} value={insights.directCount} />
-                                <MetricScale label="Total Team Size" min={globalMetrics.opCom.teamMin} max={globalMetrics.opCom.teamMax} median={globalMetrics.opCom.teamMedian} value={insights.totalTeam} />
-                            </BenchmarkBox>
-                        )}
-                        {!isTopNode && !employee._isExCom && !employee._isOpCom && globalMetrics.grade && globalMetrics.grade[employee._summaryGrade] && (
-                            <BenchmarkBox title="Grade Benchmark" rightElement={<div className="flex items-center space-x-1.5 text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded text-xs"><Award size={12} className="flex-shrink-0"/> <span>{employee._summaryGrade}</span></div>}>
-                                <MetricScale label="Direct Reports" min={globalMetrics.grade[employee._summaryGrade].drMin} max={globalMetrics.grade[employee._summaryGrade].drMax} median={globalMetrics.grade[employee._summaryGrade].drMedian} value={insights.directCount} />
-                                <MetricScale label="Total Team Size" min={globalMetrics.grade[employee._summaryGrade].teamMin} max={globalMetrics.grade[employee._summaryGrade].teamMax} median={globalMetrics.grade[employee._summaryGrade].teamMedian} value={insights.totalTeam} />
+                        {employee.level && globalMetrics.level && globalMetrics.level[employee.level] && (
+                            <BenchmarkBox title="Level Benchmark" rightElement={<div className="flex items-center space-x-1.5 text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded text-xs"><Award size={12} className="flex-shrink-0"/> <span>{employee.level}</span></div>}>
+                                <MetricScale label="Direct Reports" min={globalMetrics.level[employee.level].drMin} max={globalMetrics.level[employee.level].drMax} median={globalMetrics.level[employee.level].drMedian} value={insights.directCount} />
+                                <MetricScale label="Total Team Size" min={globalMetrics.level[employee.level].teamMin} max={globalMetrics.level[employee.level].teamMax} median={globalMetrics.level[employee.level].teamMedian} value={insights.totalTeam} />
                             </BenchmarkBox>
                         )}
                     </>
                 )}
 
                 {/* 5. TEAM DIVERSITY */}
-                {insights.directCount > 0 && (
+                {insights.directCount > 0 && totalGender > 0 && (
                     <div className="mt-5 px-1">
                         <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Team Diversity (DR)</h4>
                         <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex mt-2 shadow-inner">
@@ -1069,14 +1059,14 @@ const App = () => {
   const [filterConditions, setFilterConditions] = useState([]);
   const [openDropdown, setOpenDropdown] = useState(null);
   
-  const [sortConfigs, setSortConfigs] = useState([{ field: 'Grade', dir: 'asc' }]); 
+  const [sortConfigs, setSortConfigs] = useState([{ field: 'TeamSize', dir: 'desc' }]);
   const [activeCohortScale, setActiveCohortScale] = useState(null);
 
   const [isDragging, setIsDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [xlsxLoaded, setXlsxLoaded] = useState(false);
-  const [viewMode, setViewMode] = useState('direct'); 
+  const [warnings, setWarnings] = useState([]);
+  const [viewMode, setViewMode] = useState('direct');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [compareList, setCompareList] = useState({ blue: [], green: [], purple: [], orange: [], red: [] });
@@ -1112,15 +1102,6 @@ const App = () => {
           handleFileUpload(e.dataTransfer.files[0]);
       }
   };
-
-  useEffect(() => {
-    if (window.XLSX) { setXlsxLoaded(true); return; }
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    script.onload = () => setXlsxLoaded(true);
-    script.onerror = () => setError("Failed to load Excel parser.");
-    document.head.appendChild(script);
-  }, []);
 
   // Print Effect Lifecycle
   useEffect(() => {
@@ -1176,16 +1157,31 @@ const App = () => {
   };
 
   const handleFileUpload = async (file) => {
-    if (!window.XLSX) return setError("Excel parsing library is still loading.");
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setWarnings([]);
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = window.XLSX.read(buffer, { type: 'array' });
-      const firstSheetName = workbook.SheetNames[0];
-      const rawData = window.XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { defval: "" });
-      let historyData = workbook.SheetNames.length > 1 ? window.XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[1]], { defval: "" }) : [];
+      const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
+      const sheetName = workbook.SheetNames.find(n => n.toLowerCase() === 'employees') || workbook.SheetNames[0];
+      const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
       if (rawData.length === 0) throw new Error("Uploaded Excel file is empty.");
-      processEmployeeData(rawData, historyData);
+
+      const validation = validateHeaders(rawData);
+      if (!validation.ok) {
+        throw new Error(`Missing required column${validation.missingRequired.length > 1 ? 's' : ''}: ${validation.missingRequired.join(', ')}`);
+      }
+      // Filter out the template's "Required/Recommended/Optional" category row
+      const labelMarkers = new Set(['required', 'recommended', 'optional']);
+      const cleanedData = rawData.filter(row => {
+          const eid = String(row['Employee id (EID)'] || '').trim().toLowerCase();
+          return eid && !labelMarkers.has(eid);
+      });
+      if (cleanedData.length === 0) throw new Error("No employee rows found after parsing.");
+      const w = [];
+      if (validation.missingRecommended.length > 0) {
+        w.push(`Missing recommended column${validation.missingRecommended.length > 1 ? 's' : ''}: ${validation.missingRecommended.join(', ')}. Some UI elements will be hidden.`);
+      }
+      setWarnings(w);
+      processEmployeeData(cleanedData);
     } catch (err) {
       setError(err.message || "Failed to process file.");
     } finally {
@@ -1193,226 +1189,94 @@ const App = () => {
     }
   };
 
-  const processEmployeeData = (rawData, historyData) => {
+  const processEmployeeData = (rawData) => {
     const empMap = {};
     const directReportsMap = {};
     const matrixReportsMap = {};
-    const historyMap = {};
 
-    historyData.forEach(row => {
-        const id = row['Users Sys Id']?.toString().trim();
-        if (!id) return;
-        if (!historyMap[id]) historyMap[id] = [];
-        historyMap[id].push(row);
+    // 1. Normalize each row + derive lookup keys
+    rawData.forEach(rawRow => {
+      const norm = normalizeRow(rawRow);
+      if (!norm.eid || !norm.name) return; // require EID + name
+      const id = norm.eid.toLowerCase();
+      const emp = {
+        ...norm,
+        _id: id,
+        _formattedName: formatDisplayFirstLast(norm.name),
+        _formattedManagerName: formatDisplayFirstLast(norm.managerName),
+        _initials: buildInitials(norm.name),
+        _age: deriveAge(norm.dob),
+      };
+      const safeStr = (...parts) => parts.filter(Boolean).join(' ').toLowerCase();
+      emp._searchString = safeStr(emp._formattedName, emp.eid, emp.jobTitle, emp.function1, emp.location, (emp.cohortTags || []).join(' '));
+      empMap[id] = emp;
     });
 
-    const isCompanyTransfer = (reasonLow) => ['transfer|company change', 'vol separation|to rpg group company', 'rehire|from rpg group company', 'promotion & company transfer', 'hire|from rpg group company'].some(r => reasonLow.includes(r));
-    const corporateValues = ["Corporate", "Manufacturing", "Sales & Marketing", "Sales and Marketing"];
-
-    rawData.forEach(emp => {
-      const id = emp['Users Sys Id']?.toString().trim();
-      if (!id) return;
-      emp._id = id;
-      
-      // PRE-COMPUTE DATA ONCE FOR FAST UI
-      emp._formattedName = formatDisplayFirstLast(emp['Display Name']);
-      emp._formattedManagerName = formatDisplayFirstLast(emp['Line Manager Name'] || '');
-      emp._initials = String(emp['Display Name'] || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-      emp._searchString = (emp._formattedName + ' ' + (emp['Job Title'] || '')).toLowerCase();
-
-      emp._groupTenureDate = parseExcelDate(emp['Group Date of Joining']);
-      emp._orgTenureDate = parseExcelDate(emp['Hire Date']); 
-      emp._tenureDate = emp._groupTenureDate || emp._orgTenureDate;
-      
-      emp._isDiffTenure = false;
-      if (emp._orgTenureDate && emp._groupTenureDate) {
-          const diff = Math.abs(emp._orgTenureDate - emp._groupTenureDate);
-          if (diff > 86400000) { 
-              const d1 = emp._orgTenureDate;
-              const d2 = emp._groupTenureDate;
-              const isSwap = (d1.getFullYear() === d2.getFullYear()) && 
-                             (d1.getDate() === d2.getMonth() + 1) && 
-                             (d1.getMonth() + 1 === d2.getDate());
-              if (!isSwap) {
-                  emp._isDiffTenure = true;
-              }
-          }
-      }
-
-      emp._summaryGrade = processGrade(emp['Pay Grade (Name)']); 
-      emp._cardGrade = formatCardGrade(emp['Pay Grade (Name)']); 
-      emp['Job Title'] = formatJobTitle(emp['Job Title']);
-      
-      const business = String(emp['Business (Label)'] || '').trim();
-      const companyStr = String(emp['Company (Label)'] || '').trim();
-      emp._derivedCompany = corporateValues.includes(business) ? companyStr : business;
-      if (!emp._derivedCompany) emp._derivedCompany = 'Unspecified';
-
-      const events = historyMap[id] || [];
-      const eventsAsc = [...events].sort((a,b) => (parseExcelDate(a['Effective Start Date']) || new Date(0)) - (parseExcelDate(b['Effective Start Date']) || new Date(0)));
-
-      let timelineRaw = [];
-      let currentBlock = null;
-
-      eventsAsc.forEach(ev => {
-          const rawTitle = ev['Job Title']?.trim() || emp['Job Title']?.trim(); 
-          if (!rawTitle) return;
-          const title = formatJobTitle(rawTitle);
-          const grade = formatCardGrade(ev['Pay Grade (Name)']);
-          const location = (ev['Location (Location Name)'] || ev['Location Name'] || ev['Location'])?.trim();
-          const reasonLow = String(ev['Event Reason (Label)'] || '').trim().toLowerCase();
-          const startDate = parseExcelDate(ev['Effective Start Date']);
-
-          if (reasonLow.includes('separation')) {
-              if (currentBlock) { currentBlock.endDate = startDate; timelineRaw.push(currentBlock); currentBlock = null; }
-              return; 
-          }
-
-          let isNewBlock = false; let blockType = 'other';
-          if (!currentBlock) {
-              isNewBlock = true;
-              if (isCompanyTransfer(reasonLow)) blockType = 'company_transfer';
-              else if (reasonLow.includes('promotion')) blockType = 'promotion';
-              else if (reasonLow.includes('transfer')) blockType = 'transfer';
-              else blockType = 'hire'; 
-          } else {
-              const gradeChanged = currentBlock.grade !== 'Unspecified' && grade !== 'Unspecified' && currentBlock.grade !== grade;
-              const titleChanged = currentBlock.title !== title;
-              const isDataChangeOnly = reasonLow === 'data change' || reasonLow.includes('data change|') || reasonLow.includes('job change');
-              if (gradeChanged) { isNewBlock = true; blockType = 'promotion'; }
-              else if (isCompanyTransfer(reasonLow)) { if (titleChanged) { isNewBlock = true; blockType = 'company_transfer'; } }
-              else if (reasonLow.includes('promotion')) { isNewBlock = true; blockType = 'promotion'; }
-              else if (reasonLow.includes('transfer') || reasonLow.includes('rotation')) { if (titleChanged) { isNewBlock = true; blockType = 'transfer'; } }
-              else if (!isDataChangeOnly && titleChanged) { isNewBlock = true; blockType = 'transfer'; }
-          }
-
-          if (isNewBlock) {
-              if (currentBlock) { currentBlock.endDate = startDate; timelineRaw.push(currentBlock); }
-              currentBlock = { title, grade, location, startDate, endDate: null, type: blockType };
-          } else if (currentBlock) {
-              if (location) currentBlock.location = location;
-              currentBlock.title = title; 
-          }
-      });
-
-      if (currentBlock) { currentBlock.endDate = new Date(); timelineRaw.push(currentBlock); }
-
-      let finalTimeline = [];
-      for (let i = 0; i < timelineRaw.length; i++) {
-          let block = timelineRaw[i];
-          if (i < timelineRaw.length - 1 && block.startDate && block.endDate && (block.endDate - block.startDate < 30 * 24 * 60 * 60 * 1000)) continue;
-          if (finalTimeline.length > 0) {
-              const prevBlock = finalTimeline[finalTimeline.length - 1];
-              if (prevBlock.endDate && block.startDate && (block.startDate - prevBlock.endDate > 30 * 24 * 60 * 60 * 1000)) {
-                  finalTimeline.push({ isGap: true, duration: formatDuration(prevBlock.endDate, block.startDate) });
-              }
-          }
-          finalTimeline.push(block);
-      }
-
-      emp._timeline = finalTimeline.reverse().map(role => role.isGap ? role : { ...role, durationFormatted: formatDuration(role.startDate, role.endDate) });
-      emp._timeInRoleDate = emp._timeline.find(r => !r.isGap)?.startDate || null;
-      emp._lastPromotionDate = emp._timeline.find(r => r.type === 'promotion')?.startDate || null;
-      emp._timeWithManagerDate = emp._tenureDate; 
-      empMap[id] = { ...emp };
-    });
-
-    let ceos = Object.values(empMap).filter(emp => 
-        (!emp['Line Manager UserID'] || String(emp['Line Manager UserID']).trim() === '') &&
-        (!emp['Line Manager Name'] || String(emp['Line Manager Name']).trim() === '') &&
-        (!emp['Matrix Manager ID'] || String(emp['Matrix Manager ID']).trim() === '') &&
-        (!emp['Matrix Manager Name'] || String(emp['Matrix Manager Name']).trim() === '')
-    );
-    
-    let actualCEO = null;
-    let computedCeoId = null;
-    if (ceos.length > 1) {
-      actualCEO = ceos.find(c => {
-        const title = String(c['Job Title'] || c['Designation'] || '').toLowerCase();
-        return title.includes('ceo') || title.includes('chief') || title.includes('managing director');
-      });
-      if (!actualCEO) actualCEO = ceos[0];
-    } else if (ceos.length === 1) {
-      actualCEO = ceos[0];
-    }
-
-    if (actualCEO) {
-      computedCeoId = actualCEO._id;
-      ceos.forEach(c => {
-        if (c._id !== actualCEO._id) {
-          empMap[c._id]['Matrix Manager Name'] = actualCEO['Display Name'];
-          empMap[c._id]['Matrix Manager ID'] = actualCEO['Username'];
-        }
-      });
-    }
-
-    const sysIdMap = {}; const usernameMap = {};
+    // 2. Build manager lookup from EID and resolve directs / matrix
     Object.values(empMap).forEach(emp => {
-        const sysId = emp['Users Sys Id']?.toString().trim().toLowerCase();
-        const username = emp['Username']?.toString().trim().toLowerCase();
-        if (sysId) sysIdMap[sysId] = emp._id;
-        if (username) usernameMap[username] = emp._id;
+      const lmId = emp.managerEid ? emp.managerEid.toLowerCase() : '';
+      if (lmId && empMap[lmId] && lmId !== emp._id) {
+        emp._managerId = lmId;
+        if (!directReportsMap[lmId]) directReportsMap[lmId] = [];
+        directReportsMap[lmId].push(emp._id);
+      }
+      const matrixIds = (emp.matrixEids || [])
+        .map(m => m.toLowerCase())
+        .filter(m => m && m !== emp._id && empMap[m]);
+      emp._matrixIds = matrixIds;
+      matrixIds.forEach(mid => {
+        if (!matrixReportsMap[mid]) matrixReportsMap[mid] = [];
+        if (!matrixReportsMap[mid].includes(emp._id)) matrixReportsMap[mid].push(emp._id);
+      });
     });
 
+    // 3. Management Committee: own EID == own Management Board EID
     Object.values(empMap).forEach(emp => {
-      const lmIdStr = emp['Line Manager UserID']?.toString().trim().toLowerCase();
-      const mmIdStr = emp['Matrix Manager ID']?.toString().trim().toLowerCase();
-      const managerId = lmIdStr ? sysIdMap[lmIdStr] : null;
-      const matrixId = mmIdStr ? usernameMap[mmIdStr] : null;
-
-      if (managerId && managerId !== emp._id && empMap[managerId]) {
-        emp._managerId = managerId;
-        if (!directReportsMap[managerId]) directReportsMap[managerId] = [];
-        directReportsMap[managerId].push(emp._id);
-      }
-      if (matrixId && matrixId !== emp._id && empMap[matrixId] && matrixId !== managerId) {
-        emp._matrixId = matrixId;
-        if (!matrixReportsMap[matrixId]) matrixReportsMap[matrixId] = [];
-        matrixReportsMap[matrixId].push(emp._id);
-      }
+      const board = emp.mgmtBoardEid ? emp.mgmtBoardEid.toLowerCase() : '';
+      emp._isMgmtCommittee = !!(board && board === emp._id);
     });
 
+    // 4. Recursive insights
     const calculateInsights = (empId, visited = new Set()) => {
       if (visited.has(empId)) return empMap[empId]._insights;
       visited.add(empId);
       const directs = directReportsMap[empId] || [];
       const matrix = matrixReportsMap[empId] || [];
-      
-      let totalTeam = 0, directCount = 0, eaCount = 0, genderCount = { male: 0, female: 0, other: 0 }, probationCount = 0, noticeCount = 0;
+
+      let totalTeam = 0, directCount = 0, eaCount = 0;
+      const genderCount = { male: 0, female: 0, other: 0 };
       const directGrades = {}, matrixGrades = {}, teamGrades = {};
 
       directs.forEach(childId => {
         const child = empMap[childId];
         if (!child) return;
         const childInsights = calculateInsights(childId, visited);
-        
-        // Include EA in grade summaries and overall team sizes
-        const grade = child._summaryGrade;
-        directGrades[grade] = (directGrades[grade] || 0) + 1;
-        teamGrades[grade] = (teamGrades[grade] || 0) + 1;
-        
-        const empStatus = String(child['Employee Status (Picklist Label)'] || '').toLowerCase();
-        if (empStatus.includes('probation')) probationCount++;
-        if (empStatus.includes('notice') || String(child['Resignation Date'] || '').trim().length > 0) noticeCount++;
-        
+        const lvl = child.level || 'Unspecified';
+        directGrades[lvl] = (directGrades[lvl] || 0) + 1;
+        teamGrades[lvl] = (teamGrades[lvl] || 0) + 1;
+
         totalTeam += 1 + (childInsights ? childInsights.totalTeam : 0);
         if (childInsights) Object.entries(childInsights.teamGrades).forEach(([g, c]) => teamGrades[g] = (teamGrades[g] || 0) + c);
 
         if (!isEA(child)) {
-            // Exclude EA from diversity gender count and the core 'directCount' (used for min/max/median SoC)
-            const gender = String(child['Gender'] || '').toLowerCase();
-            if (gender.startsWith('m')) genderCount.male++; else if (gender.startsWith('f')) genderCount.female++; else genderCount.other++;
-            directCount++;
+          const gender = String(child.gender || '').toLowerCase();
+          if (gender.startsWith('m')) genderCount.male++;
+          else if (gender.startsWith('f')) genderCount.female++;
+          else if (gender) genderCount.other++;
+          directCount++;
         } else {
-            eaCount++;
+          eaCount++;
         }
       });
       matrix.forEach(childId => {
-          const child = empMap[childId];
-          if(child) matrixGrades[child._summaryGrade] = (matrixGrades[child._summaryGrade] || 0) + 1;
+        const child = empMap[childId];
+        if (child) {
+          const lvl = child.level || 'Unspecified';
+          matrixGrades[lvl] = (matrixGrades[lvl] || 0) + 1;
+        }
       });
 
-      const insights = { directCount, eaCount, matrixCount: matrix.length, totalTeam, directGrades, matrixGrades, teamGrades, genderCount, probationCount, noticeCount };
+      const insights = { directCount, eaCount, matrixCount: matrix.length, totalTeam, directGrades, matrixGrades, teamGrades, genderCount };
       empMap[empId]._insights = insights;
       empMap[empId]._directs = directs;
       empMap[empId]._matrix = matrix;
@@ -1420,40 +1284,7 @@ const App = () => {
     };
     Object.keys(empMap).forEach(id => calculateInsights(id));
 
-    // Cap timeWithManagerDate to Manager's own tenure start
-    Object.values(empMap).forEach(emp => {
-      const managerId = emp._managerId;
-      const mgr = empMap[managerId] || empMap[emp._matrixId];
-      if (mgr) {
-          const mgrJoinDate = mgr._orgTenureDate || mgr._groupTenureDate || mgr._tenureDate;
-          if (mgrJoinDate && emp._timeWithManagerDate && emp._timeWithManagerDate < mgrJoinDate) {
-              emp._timeWithManagerDate = mgrJoinDate;
-          }
-      }
-    });
-
-    Object.values(empMap).forEach(emp => {
-        if (isEA(emp)) return;
-        const rank = getRank(emp._summaryGrade);
-        const hasTeam = (emp._insights?.totalTeam || 0) > 0;
-        if (rank <= 2 && hasTeam) emp._isExCom = true;
-    });
-
-    Object.values(empMap).forEach(emp => {
-        if (isEA(emp)) return;
-        const rank = getRank(emp._summaryGrade);
-        const manager = empMap[emp._managerId];
-        const matrixManager = empMap[emp._matrixId];
-        
-        if (rank === 3 || rank === 4) {
-            if (manager && manager._isExCom) {
-                emp._isOpCom = true;
-            } else if (!manager && matrixManager && matrixManager._isExCom) {
-                emp._isOpCom = true;
-            }
-        }
-    });
-
+    // 5. Peer benchmarks + share of manager team
     Object.values(empMap).forEach(emp => {
       const managerId = emp._managerId;
       if (managerId && empMap[managerId]) {
@@ -1462,8 +1293,8 @@ const App = () => {
         const managerTeamSize = Math.max(1, manager._insights?.totalTeam || 1);
         const myBranchSize = 1 + (emp._insights?.totalTeam || 0);
         if (managerTeamSize > 0 && !isEA(emp)) {
-           emp._insights.pctOfManagerTeam = Math.round((myBranchSize / managerTeamSize) * 100);
-           emp._insights.managerValidDrCount = peers.length + 1; 
+          emp._insights.pctOfManagerTeam = Math.round((myBranchSize / managerTeamSize) * 100);
+          emp._insights.managerValidDrCount = peers.length + 1;
         }
         if (peers.length > 0) {
           const peerDrs = peers.map(pId => empMap[pId]?._insights?.directCount || 0);
@@ -1472,28 +1303,45 @@ const App = () => {
           emp._insights.peerMaxDirects = Math.max(...peerDrs);
         }
       }
-      
-      // Compute formatted duration strings once logic finishes
-      emp._tenureFormatted = formatDuration(emp._groupTenureDate || emp._tenureDate);
-      emp._orgTenureFormatted = formatDuration(emp._orgTenureDate);
-      emp._timeInRoleFormatted = formatDuration(emp._timeInRoleDate || emp._tenureDate);
-      emp._lastPromotionFormatted = formatDuration(emp._lastPromotionDate);
-      emp._timeWithManagerFormatted = formatDuration(emp._timeWithManagerDate || emp._tenureDate);
+
+      emp._tenureFormatted = emp.dateOfJoining ? formatDuration(emp.dateOfJoining) : '';
+      emp._timeInRoleFormatted = emp.dateInRole ? formatDuration(emp.dateInRole) : '';
+      emp._lastPromotionFormatted = emp.datePromoted ? formatDuration(emp.datePromoted) : '';
+      emp._timeWithManagerFormatted = emp.managerSince ? formatDuration(emp.managerSince) : '';
     });
 
-    // Globally sort base data by Grade, ExCom, OpCom
+    // 6. Pick top node: largest team among roots (rows with empty Line Manager EID), prefer MC
+    const roots = Object.values(empMap).filter(e => !e._managerId);
+    let topNode = null;
+    if (roots.length > 0) {
+      topNode = roots.slice().sort((a, b) => sortEmployees(a, b, null))[0];
+    } else {
+      topNode = Object.values(empMap).slice().sort((a, b) => sortEmployees(a, b, null))[0];
+    }
+    const computedCeoId = topNode ? topNode._id : null;
+
     const baseDataArr = Object.values(empMap).sort((a, b) => sortEmployees(a, b, computedCeoId));
     setData(baseDataArr);
     setEmployeeMap(empMap);
-    
-    if (actualCEO) {
-        setActiveEmployeeId(actualCEO._id);
-        setCeoId(actualCEO._id);
+
+    if (computedCeoId) {
+      setActiveEmployeeId(computedCeoId);
+      setCeoId(computedCeoId);
     }
   };
 
-  const allUniqueGrades = useMemo(() => [...new Set(data.map(emp => emp._summaryGrade).filter(Boolean))].sort((a, b) => getRank(a) - getRank(b)), [data]);
-  const allUniqueCompanies = useMemo(() => [...new Set(data.map(emp => emp._derivedCompany).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [data]);
+  const allUniqueByField = useMemo(() => {
+      const out = {};
+      Object.entries(FILTER_FIELD_MAP).forEach(([label, key]) => {
+          out[label] = [...new Set(data.map(emp => emp[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      });
+      const allCohorts = new Set();
+      data.forEach(emp => (emp.cohortTags || []).forEach(t => t && allCohorts.add(t)));
+      out['Cohort Tag'] = [...allCohorts].sort((a, b) => a.localeCompare(b));
+      out['Mgmt Committee'] = ['Yes', 'No'];
+      return out;
+  }, [data]);
+  const availableFilterFields = useMemo(() => MULTI_SELECT_FIELDS.filter(f => (allUniqueByField[f] || []).length > 0), [allUniqueByField]);
 
   const filteredSearch = useMemo(() => {
     if (!searchQuery) return [];
@@ -1504,30 +1352,33 @@ const App = () => {
 
   // Decoupled filtering logic
   const baseFilteredData = useMemo(() => {
-      if (filterConditions.length === 0) return data; 
+      if (filterConditions.length === 0) return data;
       return data.filter(emp => {
           const results = filterConditions.map(cond => {
-              if (!cond.value && cond.value !== 0 && !['Grade','Company','Committee'].includes(cond.field)) return false;
-              if (['Grade','Company','Committee'].includes(cond.field) && cond.value.length === 0) return false;
-
-              let empVal;
-              if (cond.field === 'Team Size') empVal = emp._insights?.totalTeam || 0;
-              else if (cond.field === 'DR Size') empVal = emp._insights?.directCount || 0;
-              else if (cond.field === 'Total Reportees') empVal = (emp._insights?.directCount || 0) + (emp._insights?.matrixCount || 0) + (emp._insights?.eaCount || 0);
-              else if (cond.field === 'Grade') empVal = emp._summaryGrade || '';
-              else if (cond.field === 'Company') empVal = emp._derivedCompany || '';
-              else if (cond.field === 'Committee') empVal = emp._isExCom ? 'ExCom' : (emp._isOpCom ? 'OpCom' : 'None');
-
-              if (['Team Size', 'DR Size', 'Total Reportees'].includes(cond.field)) {
+              if (NUMERIC_FIELDS.includes(cond.field)) {
+                  if (cond.value === '' || cond.value === null) return false;
                   const numVal = Number(cond.value);
-                  if (isNaN(numVal) || cond.value === '') return false;
+                  if (isNaN(numVal)) return false;
+                  let empVal = 0;
+                  if (cond.field === 'Team Size') empVal = emp._insights?.totalTeam || 0;
+                  else if (cond.field === 'DR Size') empVal = emp._insights?.directCount || 0;
+                  else if (cond.field === 'Total Reportees') empVal = (emp._insights?.directCount || 0) + (emp._insights?.matrixCount || 0) + (emp._insights?.eaCount || 0);
                   if (cond.operator === '=') return empVal === numVal;
                   if (cond.operator === '>') return empVal > numVal;
                   if (cond.operator === '<') return empVal < numVal;
-              } else if (['Grade', 'Company', 'Committee'].includes(cond.field)) {
-                  return cond.value.includes(empVal);
+                  return false;
               }
-              return false;
+              if (!Array.isArray(cond.value) || cond.value.length === 0) return false;
+              if (cond.field === 'Cohort Tag') {
+                  return (emp.cohortTags || []).some(t => cond.value.includes(t));
+              }
+              if (cond.field === 'Mgmt Committee') {
+                  const mc = emp._isMgmtCommittee ? 'Yes' : 'No';
+                  return cond.value.includes(mc);
+              }
+              const key = FILTER_FIELD_MAP[cond.field];
+              if (!key) return false;
+              return cond.value.includes(emp[key] || '');
           });
           if (results.length === 0) return false;
           return filterMatchMode === 'and' ? results.every(r => r) : results.some(r => r);
@@ -1543,8 +1394,10 @@ const App = () => {
                   let valA, valB;
                   switch (config.field) {
                       case 'Employee': valA = a._formattedName; valB = b._formattedName; break;
-                      case 'Grade': valA = getEmpSortRank(a, ceoId); valB = getEmpSortRank(b, ceoId); break;
-                      case 'Department': valA = a['Department (Label)'] || ''; valB = b['Department (Label)'] || ''; break;
+                      case 'Level': valA = a.level || ''; valB = b.level || ''; break;
+                      case 'JobTitle': valA = a.jobTitle || ''; valB = b.jobTitle || ''; break;
+                      case 'Function1': valA = a.function1 || ''; valB = b.function1 || ''; break;
+                      case 'Location': valA = a.location || ''; valB = b.location || ''; break;
                       case 'DRSize': valA = a._insights?.directCount || 0; valB = b._insights?.directCount || 0; break;
                       case 'MatrixSize': valA = a._insights?.matrixCount || 0; valB = b._insights?.matrixCount || 0; break;
                       case 'TeamSize': valA = a._insights?.totalTeam || 0; valB = b._insights?.totalTeam || 0; break;
@@ -1559,135 +1412,118 @@ const App = () => {
           });
       }
       return filtered;
-  }, [baseFilteredData, sortConfigs, ceoId]);
+  }, [baseFilteredData, sortConfigs]);
+
+  const getCohortStats = (arr) => {
+      if (arr.length === 0) return { count: 0 };
+      const drs = arr.map(a => a._insights?.directCount || 0);
+      const matrix = arr.map(a => a._insights?.matrixCount || 0);
+      const teams = arr.map(a => a._insights?.totalTeam || 0);
+      const totalReps = arr.map(a => (a._insights?.directCount || 0) + (a._insights?.matrixCount || 0));
+      const nzMatrix = matrix.filter(m => m > 0);
+      return {
+          count: arr.length,
+          drMin: Math.min(...drs), drMax: Math.max(...drs), drMedian: getMedian(drs),
+          teamMin: Math.min(...teams), teamMax: Math.max(...teams), teamMedian: getMedian(teams),
+          matrixMin: nzMatrix.length ? Math.min(...nzMatrix) : 0,
+          matrixMax: nzMatrix.length ? Math.max(...nzMatrix) : 0,
+          matrixMedian: getMedian(nzMatrix),
+          matrixHasZeros: nzMatrix.length !== matrix.length,
+          matrixNzCount: nzMatrix.length,
+          totalRepMin: Math.min(...totalReps), totalRepMax: Math.max(...totalReps), totalRepMedian: getMedian(totalReps)
+      };
+  };
 
   const cohortMetrics = useMemo(() => {
-      const cohorts = { ExCom: [], OpCom: [], VP: [], GM: [], M3: [] };
+      const mc = baseFilteredData.filter(e => e._isMgmtCommittee && e._id !== ceoId);
+      const tagBuckets = {};
       baseFilteredData.forEach(emp => {
-          if (emp._isExCom && emp._id !== ceoId) cohorts.ExCom.push(emp);
-          if (emp._isOpCom && emp._id !== ceoId) cohorts.OpCom.push(emp);
-          if (emp._summaryGrade === 'VP') cohorts.VP.push(emp);
-          if (emp._summaryGrade === 'GM') cohorts.GM.push(emp);
-          if (emp._summaryGrade === 'M3') cohorts.M3.push(emp);
+          (emp.cohortTags || []).forEach(t => {
+              if (!t) return;
+              if (!tagBuckets[t]) tagBuckets[t] = [];
+              tagBuckets[t].push(emp);
+          });
       });
-
-      const getStats = (arr) => {
-          if (arr.length === 0) return { count: 0 };
-          const drs = arr.map(a => a._insights?.directCount || 0);
-          const matrix = arr.map(a => a._insights?.matrixCount || 0);
-          const teams = arr.map(a => a._insights?.totalTeam || 0);
-          const totalReps = arr.map(a => (a._insights?.directCount || 0) + (a._insights?.matrixCount || 0));
-          
-          const nzMatrix = matrix.filter(m => m > 0);
-
-          return {
-              count: arr.length,
-              drMin: drs.length ? Math.min(...drs) : 0,
-              drMax: drs.length ? Math.max(...drs) : 0,
-              drMedian: getMedian(drs),
-
-              teamMin: teams.length ? Math.min(...teams) : 0,
-              teamMax: teams.length ? Math.max(...teams) : 0,
-              teamMedian: getMedian(teams),
-
-              matrixMin: nzMatrix.length ? Math.min(...nzMatrix) : 0,
-              matrixMax: nzMatrix.length ? Math.max(...nzMatrix) : 0,
-              matrixMedian: getMedian(nzMatrix),
-              matrixHasZeros: nzMatrix.length !== matrix.length,
-              matrixNzCount: nzMatrix.length,
-
-              totalRepMin: totalReps.length ? Math.min(...totalReps) : 0,
-              totalRepMax: totalReps.length ? Math.max(...totalReps) : 0,
-              totalRepMedian: getMedian(totalReps)
-          };
-      };
-
-      return {
-          ExCom: getStats(cohorts.ExCom),
-          OpCom: getStats(cohorts.OpCom),
-          VP: getStats(cohorts.VP),
-          GM: getStats(cohorts.GM),
-          M3: getStats(cohorts.M3)
-      };
+      const out = { 'Mgmt Committee': getCohortStats(mc) };
+      Object.entries(tagBuckets).forEach(([tag, arr]) => {
+          out[tag] = getCohortStats(arr);
+      });
+      return out;
   }, [baseFilteredData, ceoId]);
 
   const dynamicGlobalMetrics = useMemo(() => {
-    const grades = {};
-    baseFilteredData.forEach(emp => {
-        if (!isEA(emp)) {
-            const g = emp._summaryGrade;
-            if (!grades[g]) grades[g] = { drs: [], teams: [] };
-            grades[g].drs.push(emp._insights?.directCount || 0);
-            grades[g].teams.push(emp._insights?.totalTeam || 0);
-        }
-    });
-
-    const gradeMetricsFinal = {};
-    Object.keys(grades).forEach(g => {
-        gradeMetricsFinal[g] = {
-            drMin: Math.min(...grades[g].drs), drMax: Math.max(...grades[g].drs), drMedian: getMedian(grades[g].drs),
-            teamMin: Math.min(...grades[g].teams), teamMax: Math.max(...grades[g].teams), teamMedian: getMedian(grades[g].teams)
-        };
-    });
-
-    return {
-        grade: gradeMetricsFinal,
-        exCom: cohortMetrics.ExCom,
-        opCom: cohortMetrics.OpCom
-    };
+      const buckets = {};
+      baseFilteredData.forEach(emp => {
+          if (isEA(emp)) return;
+          const lvl = emp.level;
+          if (!lvl) return;
+          if (!buckets[lvl]) buckets[lvl] = { drs: [], teams: [] };
+          buckets[lvl].drs.push(emp._insights?.directCount || 0);
+          buckets[lvl].teams.push(emp._insights?.totalTeam || 0);
+      });
+      const levelMetrics = {};
+      Object.entries(buckets).forEach(([lvl, b]) => {
+          levelMetrics[lvl] = {
+              drMin: Math.min(...b.drs), drMax: Math.max(...b.drs), drMedian: getMedian(b.drs),
+              teamMin: Math.min(...b.teams), teamMax: Math.max(...b.teams), teamMedian: getMedian(b.teams)
+          };
+      });
+      return {
+          level: levelMetrics,
+          mgmtCommittee: cohortMetrics['Mgmt Committee']
+      };
   }, [baseFilteredData, cohortMetrics]);
 
   const heatmapStats = useMemo(() => {
-      const depts = {};
+      const buckets = {};
       baseFilteredData.forEach(emp => {
           if (emp._insights?.directCount > 0) {
-              const d = emp['Department (Label)'] || 'Unknown';
-              if (!depts[d]) depts[d] = [];
-              depts[d].push(emp._insights.directCount);
+              const key = emp.function1 || emp.location;
+              if (!key) return;
+              if (!buckets[key]) buckets[key] = [];
+              buckets[key].push(emp._insights.directCount);
           }
       });
-      return Object.entries(depts).map(([d, drs]) => ({ dept: d, medianDr: getMedian(drs), count: drs.length }))
-            .sort((a,b) => b.medianDr - a.medianDr).slice(0, 10);
+      return Object.entries(buckets)
+          .map(([d, drs]) => ({ dept: d, medianDr: getMedian(drs), count: drs.length }))
+          .sort((a, b) => b.medianDr - a.medianDr)
+          .slice(0, 10);
   }, [baseFilteredData]);
 
-  const filterFieldsOrder = ['Company', 'Committee', 'Grade', 'DR Size', 'Total Reportees', 'Team Size'];
+  const filterFieldsOrder = useMemo(() => [...availableFilterFields, ...NUMERIC_FIELDS], [availableFilterFields]);
+
+  const defaultsForField = (field) => {
+      if (NUMERIC_FIELDS.includes(field)) return { operator: '=', value: '' };
+      return { operator: 'in', value: [] };
+  };
 
   const addFilterCondition = () => {
+      if (filterFieldsOrder.length === 0) return;
       const nextField = filterFieldsOrder[filterConditions.length % filterFieldsOrder.length];
-      
-      let defaultOp = '=', defaultVal = '';
-      if (['Team Size', 'DR Size', 'Total Reportees'].includes(nextField)) { defaultOp = '='; defaultVal = ''; }
-      if (['Grade', 'Company', 'Committee'].includes(nextField)) { defaultOp = 'in'; defaultVal = []; }
-
-      setFilterConditions([...filterConditions, { id: Date.now(), field: nextField, operator: defaultOp, value: defaultVal }]);
+      const { operator, value } = defaultsForField(nextField);
+      setFilterConditions([...filterConditions, { id: Date.now(), field: nextField, operator, value }]);
       setAppTab('table');
       if (!isSidebarOpen) setIsSidebarOpen(true);
   };
-  
+
   const updateFilterCondition = (id, key, val) => {
-      setFilterConditions(filterConditions.map(c => c.id === id ? { ...c, [key]: val } : c));
-      if (key === 'field') {
-          setFilterConditions(prev => prev.map(c => {
-              if (c.id === id) {
-                  let defaultOp = '=', defaultVal = '';
-                  if (['Team Size', 'DR Size', 'Total Reportees'].includes(val)) { defaultOp = '='; defaultVal = ''; }
-                  if (['Grade', 'Company', 'Committee'].includes(val)) { defaultOp = 'in'; defaultVal = []; }
-                  return { ...c, operator: defaultOp, value: defaultVal };
-              }
-              return c;
-          }));
-      }
+      setFilterConditions(prev => prev.map(c => {
+          if (c.id !== id) return c;
+          if (key === 'field') {
+              const d = defaultsForField(val);
+              return { ...c, field: val, operator: d.operator, value: d.value };
+          }
+          return { ...c, [key]: val };
+      }));
       setAppTab('table');
   };
 
   const handleSummaryTileClick = (type) => {
-      let newFilters = [...filterConditions];
-      if (['VP', 'GM', 'M3'].includes(type)) {
-          newFilters = newFilters.filter(f => f.field !== 'Grade');
-          newFilters.push({ id: Date.now(), field: 'Grade', operator: 'in', value: [type] });
-      } else if (['ExCom', 'OpCom'].includes(type)) {
-          newFilters = newFilters.filter(f => f.field !== 'Committee');
-          newFilters.push({ id: Date.now(), field: 'Committee', operator: 'in', value: [type] });
+      let newFilters = filterConditions.filter(f => f.field !== 'Cohort Tag' && f.field !== 'Mgmt Committee');
+      if (type === 'Mgmt Committee') {
+          newFilters.push({ id: Date.now(), field: 'Mgmt Committee', operator: 'in', value: ['Yes'] });
+      } else {
+          newFilters.push({ id: Date.now(), field: 'Cohort Tag', operator: 'in', value: [type] });
       }
       setFilterConditions(newFilters);
       setActiveCohortScale(type);
@@ -1742,10 +1578,14 @@ const App = () => {
             <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center"><Upload size={40} /></div>
             <h2 className="text-2xl font-bold text-slate-800">Upload Employee Data</h2>
             <p className="text-slate-500 text-sm">Drag and drop your Excel (.xlsx) file here.<br/>Ensure it contains standard employee details.</p>
-            <input type="file" accept=".xlsx, .xls" className="hidden" id="file-upload" disabled={!xlsxLoaded} onChange={(e) => e.target.files[0] && handleFileUpload(e.target.files[0])} />
-            <label htmlFor="file-upload" className={`px-6 py-3 text-white font-medium rounded-lg transition-colors shadow-md ${!xlsxLoaded || loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'}`}>
-              {!xlsxLoaded ? 'Loading Library...' : loading ? 'Processing...' : 'Select Excel File'}
+            <input type="file" accept=".xlsx, .xls" className="hidden" id="file-upload" disabled={loading} onChange={(e) => e.target.files[0] && handleFileUpload(e.target.files[0])} />
+            <label htmlFor="file-upload" className={`px-6 py-3 text-white font-medium rounded-lg transition-colors shadow-md ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'}`}>
+              {loading ? 'Processing...' : 'Select Excel File'}
             </label>
+            <p className="text-xs text-slate-400">Required columns: Employee id (EID), Employee name, Line Manager EID. See <span className="font-mono">orglens_sample_template.xlsx</span> for the full schema.</p>
+            {warnings && warnings.length > 0 && warnings.map((w, i) => (
+                <p key={i} className="text-amber-600 text-xs mt-3 font-medium">{w}</p>
+            ))}
             {error && <p className="text-red-500 text-sm mt-4 font-medium">{error}</p>}
           </div>
         </div>
@@ -1814,7 +1654,7 @@ const App = () => {
                             {filteredSearch.length > 0 ? filteredSearch.map(emp => (
                                 <button key={emp._id} className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b last:border-0 flex flex-col" onClick={() => { handleEmployeeSelect(emp._id); setSearchQuery(''); setIsSearchOpen(false); }}>
                                   <span className="font-semibold text-slate-800">{emp._formattedName}</span>
-                                  <span className="text-xs text-slate-500">{emp['Job Title']} • {emp['Department (Label)']}</span>
+                                  <span className="text-xs text-slate-500">{[emp.jobTitle, emp.function1 || emp.location].filter(Boolean).join(' • ')}</span>
                                 </button>
                               )) : <div className="px-4 py-3 text-slate-500 text-sm">No employees found.</div>}
                           </div>
@@ -1865,19 +1705,17 @@ const App = () => {
                                         </div>
 
                                         <div className="space-y-1.5">
-                                            {filterConditions.map((cond, index) => (
+                                            {filterConditions.map((cond) => (
                                                 <div key={cond.id} className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 border border-transparent hover:border-slate-200 group transition-colors">
                                                     
-                                                    <select className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer p-0 border-none w-[95px] flex-shrink-0 appearance-none" value={cond.field} onChange={(e) => updateFilterCondition(cond.id, 'field', e.target.value)}>
-                                                        <option value="Company">Company</option>
-                                                        <option value="Committee">Leadership</option>
-                                                        <option value="Grade">Grade</option>
-                                                        <option value="DR Size">Direct Reports Count</option>
+                                                    <select className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer p-0 border-none w-[110px] flex-shrink-0 appearance-none" value={cond.field} onChange={(e) => updateFilterCondition(cond.id, 'field', e.target.value)}>
+                                                        {availableFilterFields.map(f => <option key={f} value={f}>{f}</option>)}
+                                                        <option value="DR Size">Direct Reports</option>
                                                         <option value="Total Reportees">Total Reportees</option>
                                                         <option value="Team Size">Team Size</option>
                                                     </select>
 
-                                                    {['Team Size', 'DR Size', 'Total Reportees'].includes(cond.field) && (
+                                                    {NUMERIC_FIELDS.includes(cond.field) && (
                                                         <select className="bg-white border border-slate-200 rounded px-1 text-xs font-medium text-slate-700 focus:outline-none h-6" value={cond.operator} onChange={(e) => updateFilterCondition(cond.id, 'operator', e.target.value)}>
                                                             <option value="=">=</option>
                                                             <option value=">">&gt;</option>
@@ -1886,21 +1724,22 @@ const App = () => {
                                                     )}
 
                                                     <div className="flex-1 min-w-0 relative">
-                                                        {['Team Size', 'DR Size', 'Total Reportees'].includes(cond.field) ? (
+                                                        {NUMERIC_FIELDS.includes(cond.field) ? (
                                                             <input type="number" className="w-full border border-slate-200 rounded px-2 text-xs font-medium text-slate-700 focus:outline-none focus:border-blue-400 h-6" placeholder="0" value={cond.value} onChange={(e) => updateFilterCondition(cond.id, 'value', e.target.value)} />
                                                         ) : (
                                                             <div className="relative">
                                                                 <button onClick={() => setOpenDropdown(openDropdown === cond.id ? null : cond.id)} className="w-full border border-slate-200 rounded px-2 text-xs font-medium bg-white text-left flex justify-between items-center focus:border-blue-400 h-6 truncate">
-                                                                    <span className="truncate text-slate-700">{cond.value.length > 0 ? `${cond.value.length} Selected` : `Select...`}</span><ChevronDown size={12} className="text-slate-400 flex-shrink-0 ml-1" />
+                                                                    <span className="truncate text-slate-700">{Array.isArray(cond.value) && cond.value.length > 0 ? `${cond.value.length} Selected` : `Select...`}</span><ChevronDown size={12} className="text-slate-400 flex-shrink-0 ml-1" />
                                                                 </button>
                                                                 {openDropdown === cond.id && (
                                                                     <div className="absolute top-full left-0 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-slate-200 shadow-xl rounded-md z-50 p-1 flex flex-col" style={{ scrollbarWidth: 'thin' }}>
-                                                                        {(cond.field === 'Grade' ? allUniqueGrades : (cond.field === 'Company' ? allUniqueCompanies : ['ExCom', 'OpCom'])).map(item => (
+                                                                        {(allUniqueByField[cond.field] || []).map(item => (
                                                                             <label key={item} className="flex items-center gap-2 text-xs p-1.5 hover:bg-slate-50 rounded cursor-pointer border border-transparent transition-colors">
-                                                                                <input type="checkbox" className="rounded text-blue-600 focus:ring-blue-500 w-3 h-3 m-0" checked={cond.value.includes(item)} onChange={(e) => {
-                                                                                        const newVals = e.target.checked ? [...cond.value, item] : cond.value.filter(v => v !== item);
+                                                                                <input type="checkbox" className="rounded text-blue-600 focus:ring-blue-500 w-3 h-3 m-0" checked={Array.isArray(cond.value) && cond.value.includes(item)} onChange={(e) => {
+                                                                                        const cur = Array.isArray(cond.value) ? cond.value : [];
+                                                                                        const newVals = e.target.checked ? [...cur, item] : cur.filter(v => v !== item);
                                                                                         updateFilterCondition(cond.id, 'value', newVals);
-                                                                                    }} 
+                                                                                    }}
                                                                                 />
                                                                                 <span className="truncate text-slate-700" title={item}>{item}</span>
                                                                             </label>
@@ -1927,18 +1766,12 @@ const App = () => {
                                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Cohort Summaries</h3>
 
                                 <div className="flex flex-col gap-3">
-                                    {['ExCom', 'OpCom', 'VP', 'GM', 'M3'].map(k => {
+                                    {Object.keys(cohortMetrics).filter(k => cohortMetrics[k] && cohortMetrics[k].count > 0).map(k => {
                                         const s = cohortMetrics[k];
-                                        if (!s || s.count === 0) return null;
-                                        
-                                        let bgClass = 'bg-white border-slate-200 hover:border-slate-400';
-                                        let titleClass = 'text-slate-700';
-                                        let Icon = null;
-                                        
-                                        if (k === 'ExCom') { bgClass = 'bg-amber-50 border-amber-200 hover:border-amber-400'; titleClass = 'text-amber-800'; }
-                                        else if (k === 'OpCom') { bgClass = 'bg-indigo-50 border-indigo-200 hover:border-indigo-400'; titleClass = 'text-indigo-800'; }
-                                        else { Icon = Award; }
-
+                                        const isMC = k === 'Mgmt Committee';
+                                        const bgClass = isMC ? 'bg-amber-50 border-amber-200 hover:border-amber-400' : 'bg-white border-slate-200 hover:border-slate-400';
+                                        const titleClass = isMC ? 'text-amber-800' : 'text-slate-700';
+                                        const Icon = isMC ? null : Award;
                                         return (
                                             <button key={k} onClick={() => handleSummaryTileClick(k)} className={`rounded-xl p-3 shadow-sm transition-all text-left border group ${bgClass} ${activeCohortScale === k ? 'ring-2 ring-blue-500 ring-offset-1' : ''}`}>
                                                 <div className="flex justify-between items-end mb-2.5 border-b border-slate-200/50 pb-2">
@@ -1953,6 +1786,9 @@ const App = () => {
                                             </button>
                                         );
                                     })}
+                                    {Object.keys(cohortMetrics).filter(k => cohortMetrics[k]?.count > 0).length === 0 && (
+                                        <div className="text-xs text-slate-400 italic px-2">No cohorts available. Provide Management Board EID or Cohort Tags.</div>
+                                    )}
                                 </div>
 
                                 {/* Active Cohort Scales & Heatmap Collapse */}
@@ -2023,18 +1859,15 @@ const App = () => {
                     </span>
                     {filterConditions.flatMap(cond => {
                         const pills = [];
-                        let displayField = cond.field;
-                        if (cond.field === 'Committee') displayField = 'Leadership';
-                        if (cond.field === 'DR Size') displayField = 'Directs';
-
-                        if (['Grade', 'Company', 'Committee'].includes(cond.field)) {
-                            if (Array.isArray(cond.value)) {
-                                cond.value.forEach(val => {
-                                    pills.push({ condId: cond.id, type: 'array', val: val, display: val });
-                                });
+                        const displayField = cond.field === 'DR Size' ? 'Directs' : cond.field;
+                        if (NUMERIC_FIELDS.includes(cond.field)) {
+                            if (cond.value !== '' && cond.value !== null) {
+                                pills.push({ condId: cond.id, type: 'single', display: `${displayField} ${cond.operator} ${cond.value}` });
                             }
-                        } else if (['Team Size', 'DR Size', 'Total Reportees'].includes(cond.field)) {
-                            pills.push({ condId: cond.id, type: 'single', display: `${displayField} ${cond.operator} ${cond.value}` });
+                        } else if (Array.isArray(cond.value)) {
+                            cond.value.forEach(val => {
+                                pills.push({ condId: cond.id, type: 'array', val, display: `${displayField}: ${val}` });
+                            });
                         }
                         return pills;
                     }).map((pill, i) => (
@@ -2072,9 +1905,10 @@ const App = () => {
                             <thead className="text-slate-600 border-b border-slate-200 sticky top-0 z-10 bg-slate-50 shadow-sm">
                                 <tr>
                                     <SortableHeader label="Employee" field="Employee" sortConfigs={sortConfigs} handleSort={handleSort} />
-                                    <SortableHeader label="Grade" field="Grade" sortConfigs={sortConfigs} handleSort={handleSort} />
+                                    <SortableHeader label="Level" field="Level" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="Job Title" field="JobTitle" sortConfigs={sortConfigs} handleSort={handleSort} />
-                                    <SortableHeader label="Department" field="Department" sortConfigs={sortConfigs} handleSort={handleSort} />
+                                    <SortableHeader label="Function 1" field="Function1" sortConfigs={sortConfigs} handleSort={handleSort} />
+                                    <SortableHeader label="Location" field="Location" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="DR" field="DRSize" align="center" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="Mat" field="MatrixSize" align="center" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="Team" field="TeamSize" align="center" sortConfigs={sortConfigs} handleSort={handleSort} />
@@ -2084,10 +1918,11 @@ const App = () => {
                             <tbody className="divide-y divide-slate-100">
                                 {tabularSortedData.map((emp) => (
                                     <tr key={emp._id} id={`table-row-${emp._id}`} className="hover:bg-blue-50/50 bg-white cursor-pointer transition-colors" onClick={() => handleEmployeeSelect(emp._id)}>
-                                        <td className="px-4 py-3"><div className="font-bold text-slate-800 flex items-center gap-1.5"><span className="truncate max-w-[200px]">{emp._formattedName}</span>{emp._isExCom && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded uppercase font-bold flex-shrink-0">Ex</span>}{emp._isOpCom && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 rounded uppercase font-bold flex-shrink-0">Op</span>}</div></td>
-                                        <td className="px-4 py-3">{emp._cardGrade && emp._cardGrade !== 'Unspecified' ? <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-bold border border-slate-200">{emp._cardGrade}</span> : <span className="text-slate-400">-</span>}</td>
-                                        <td className="px-4 py-3 text-slate-700"><div className="truncate max-w-[200px]" title={emp['Job Title']}>{emp['Job Title']}</div></td>
-                                        <td className="px-4 py-3 text-slate-600"><div className="truncate max-w-[150px]" title={emp['Department (Label)']}>{emp['Department (Label)'] || ''}</div></td>
+                                        <td className="px-4 py-3"><div className="font-bold text-slate-800 flex items-center gap-1.5"><span className="truncate max-w-[200px]">{emp._formattedName}</span>{emp._isMgmtCommittee && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded uppercase font-bold flex-shrink-0">MC</span>}</div></td>
+                                        <td className="px-4 py-3">{emp.level ? <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-bold border border-slate-200">{emp.level}</span> : <span className="text-slate-400">-</span>}</td>
+                                        <td className="px-4 py-3 text-slate-700"><div className="truncate max-w-[200px]" title={emp.jobTitle}>{emp.jobTitle || ''}</div></td>
+                                        <td className="px-4 py-3 text-slate-600"><div className="truncate max-w-[150px]" title={emp.function1}>{emp.function1 || ''}</div></td>
+                                        <td className="px-4 py-3 text-slate-600"><div className="truncate max-w-[150px]" title={emp.location}>{emp.location || ''}</div></td>
                                         <td className="px-4 py-3 text-center font-medium text-blue-700">{formatNum(emp._insights?.directCount)}</td>
                                         <td className="px-4 py-3 text-center font-medium text-purple-600">{formatNum(emp._insights?.matrixCount)}</td>
                                         <td className="px-4 py-3 text-center font-medium text-orange-600">{formatNum(emp._insights?.totalTeam)}</td>
