@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - claude/align-excel-template-2wIg2
   workflow_dispatch:
 
 permissions:
