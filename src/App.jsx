@@ -17,14 +17,14 @@ const OPTIONAL_COLUMNS = [
 
 // Status color tokens shared by card, spotlight, table, print
 const STATUS_STYLES = {
-    Active:   { chip: 'bg-leaf/10 text-leaf border-leaf/40',         rule: '#3F9460', label: 'Active' },
-    WIP:      { chip: 'bg-ember/10 text-ember border-ember/40',      rule: '#D9761E', label: 'WIP' },
-    Offered:  { chip: 'bg-signal/10 text-signal border-signal/40',   rule: '#1B5EA6', label: 'Offered' },
-    Vacant:   { chip: 'bg-red-50 text-red-700 border-red-200',       rule: '#B81F1F', label: 'Vacant' },
+    Active:   { chip: 'bg-leaf/20 text-leaf border-leaf/60',         rule: '#3F9460', label: 'Active' },
+    WIP:      { chip: 'bg-ember/20 text-ember border-ember/60',      rule: '#D9761E', label: 'WIP' },
+    Offered:  { chip: 'bg-signal/20 text-signal border-signal/60',   rule: '#1B5EA6', label: 'Offered' },
+    Vacant:   { chip: 'bg-red-100 text-red-800 border-red-300',      rule: '#B81F1F', label: 'Vacant' },
 };
 const NAME_STATUS_TINT = {
-    approved:   { card: 'bg-graphite-100 border-graphite-300',                printTile: 'bg-[#EBEDF1] border-[#B4BBC8]',   label: 'Approved' },
-    unapproved: { card: 'bg-signal/10 border-signal/40 text-graphite-900',    printTile: 'bg-[#E5EFF8] border-[#5FA1D6]',   label: 'Unapproved' },
+    approved:   { card: 'bg-graphite-200 border-graphite-400',                printTile: 'bg-[#D6DAE2] border-[#8892A3]',   label: 'Approved' },
+    unapproved: { card: 'bg-signal/20 border-signal/60 text-graphite-900',    printTile: 'bg-[#D2E3F2] border-[#1B5EA6]',   label: 'Unapproved' },
 };
 
 // --- Format Helpers ---
@@ -1073,12 +1073,14 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
   const isTopNode = employee._id === ceoId;
 
   const nameTint = employee._nameStatus ? NAME_STATUS_TINT[employee._nameStatus] : null;
+  const statusStyle = STATUS_STYLES[employee.currentStatus];
   const baseBg = nameTint ? nameTint.card : 'bg-white';
   let cardClasses = `relative w-64 min-w-[16rem] mx-auto ${baseBg} rounded-xl shadow-md border p-4 transition-all duration-brand-base flex flex-col group `;
   if (isActive) cardClasses += "border-blue-500 ring-4 ring-blue-100 shadow-xl scale-105 cursor-default z-10";
   else if (isMatrixNode) cardClasses += "border-purple-300 border-dashed hover:border-purple-500 hover:shadow-lg cursor-pointer";
   else if (!nameTint) cardClasses += "border-slate-200 hover:border-blue-400 hover:shadow-lg cursor-pointer";
   else cardClasses += " hover:shadow-lg cursor-pointer";
+  const cardStyle = statusStyle ? { borderLeft: `4px solid ${statusStyle.rule}` } : undefined;
 
   let popupHeaderClass = "px-3 py-2 border-b text-xs font-bold uppercase tracking-wider flex justify-between ";
   if (gradeTooltip === 'direct') popupHeaderClass += "bg-blue-100 text-blue-800 border-blue-200";
@@ -1087,7 +1089,7 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
 
   return (
     <div id={isActive ? "active-employee-card" : undefined} className={`relative flex justify-center w-full ${isActive ? 'z-10' : 'z-0'}`}>
-      <div className={cardClasses} onClick={!isActive ? onClick : undefined} onContextMenu={(e) => onContextMenu && onContextMenu(e, employee)}>
+      <div className={cardClasses} style={cardStyle} onClick={!isActive ? onClick : undefined} onContextMenu={(e) => onContextMenu && onContextMenu(e, employee)}>
         
         {employee._isMgmtCommittee && (
             <div className="absolute top-0 right-10 z-20 drop-shadow-sm" title="Management Committee">
