@@ -263,6 +263,29 @@ const sha256Hex = async (text) => {
     return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
+const PrivacyChip = () => {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-brand border border-graphite-200 bg-graphite-50 text-[10px] font-mono uppercase tracking-wider text-graphite-700 cursor-help">
+                <span className="w-1.5 h-1.5 rounded-full bg-leaf" aria-hidden />
+                Local only
+            </span>
+            {open && (
+                <div className="absolute left-0 top-full mt-2 w-72 bg-white border border-graphite-200 rounded-brand shadow-lg p-3 z-50 text-[11px] font-sans text-graphite-700 leading-relaxed">
+                    <p className="font-semibold text-graphite-900 mb-1.5">Your data stays in this tab.</p>
+                    <ul className="space-y-1 list-disc pl-4">
+                        <li>File parsed in your browser via SheetJS.</li>
+                        <li>Lives in memory only &mdash; no storage, no cookies.</li>
+                        <li>No analytics, telemetry, or third-party scripts.</li>
+                        <li>Refresh or close the tab and you&rsquo;ll need to re-upload.</li>
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const AmnsMark = ({ size = 'md', variant = 'light' }) => {
     const sizes = {
         sm: { mark: 'text-xl', sub: 'text-[8px]', gap: 'mt-0' },
@@ -370,7 +393,7 @@ const LockScreen = ({ onUnlock }) => {
                     </form>
                     <div className="mt-10 pt-6 border-t border-graphite-200">
                         <p className="font-sans text-[11px] text-graphite-500 leading-relaxed">
-                            <span className="font-semibold text-graphite-700">Privacy.</span> All processing happens in your browser. The file you upload is parsed locally and is never sent to any server. Refreshing or closing this tab clears all data.
+                            <span className="font-semibold text-graphite-700">Privacy.</span> Your spreadsheet is parsed in this browser tab and lives in memory only — no upload, no localStorage, no analytics, no third-party requests. Refresh or close the tab and the data is gone; you&rsquo;ll need to re-upload to continue.
                         </p>
                     </div>
                 </div>
@@ -545,8 +568,8 @@ const PrintTile = ({ employee, isMatrix, isLineManager, targetLocation }) => {
             style={{ borderLeft: `4px solid ${ruleColor}` }}
         >
             <div className="flex justify-between items-start gap-1 mb-0.5">
-                <div className="font-display font-medium text-[11px] leading-tight truncate pr-1">{employee._formattedName || (nameTint ? nameTint.label : '')}</div>
-                {employee.level && <div className="text-[9px] font-mono font-semibold px-1 rounded-brand border border-graphite-300 whitespace-nowrap flex-shrink-0 bg-white">{employee.level}</div>}
+                <div className="font-display font-medium text-[11px] leading-tight truncate pr-1 min-w-0 flex-1">{employee._formattedName || (nameTint ? nameTint.label : '')}</div>
+                {employee.level && <div className="text-[9px] font-mono font-semibold px-1 rounded-brand border border-graphite-300 whitespace-nowrap flex-shrink-0 bg-white">{employee.level.split(' - ')[0]}</div>}
             </div>
             <div className="text-[9px] font-sans text-graphite-600 truncate">{employee.jobTitle || ''}</div>
             {showLocation && (
@@ -1868,7 +1891,7 @@ const App = () => {
                     Upload your <em className="text-red-600 not-italic font-display italic">organisation file.</em>
                 </h1>
                 <p className="font-sans text-graphite-500 text-[15px] leading-relaxed mb-8 max-w-xl">
-                    Drop in the AM/NS sample template populated with your employee data, or upload any Excel file using the same column headers. Parsing happens locally — nothing leaves your browser.
+                    Drop in the AM/NS sample template populated with your employee data, or any Excel file with the same headers. Parsing happens in this browser — nothing is uploaded, and a refresh clears everything.
                 </p>
 
                 <div
@@ -1906,7 +1929,7 @@ const App = () => {
                 </div>
 
                 <p className="font-sans text-[11px] text-graphite-500 mt-6 leading-relaxed max-w-xl">
-                    <span className="font-semibold text-graphite-700">Privacy.</span> All processing happens in your browser. The file you upload is parsed locally and is never sent to any server. Refreshing or closing this tab clears all data.
+                    <span className="font-semibold text-graphite-700">Privacy.</span> Your spreadsheet is parsed in this browser tab and lives in memory only — no upload, no localStorage, no analytics, no third-party requests. Refresh or close the tab and the data is gone; you&rsquo;ll need to re-upload to continue.
                 </p>
             </div>
         </main>
@@ -1948,8 +1971,9 @@ const App = () => {
       {/* MAIN APPLICATION (Hidden during print) */}
       <div className={`flex-col h-screen w-full overflow-hidden ${printNodeId ? 'hidden' : 'flex'} print:hidden`}>
           <header className="bg-white border-b border-graphite-100 px-6 py-4 flex items-center justify-between shadow-sm z-30 flex-shrink-0">
-            <div className="flex items-center w-1/3">
+            <div className="flex items-center gap-3 w-1/3">
               <AmnsMark size="sm" />
+              <PrivacyChip />
             </div>
             <div className="flex bg-graphite-50 p-1 rounded-brand border border-graphite-100 w-fit mx-auto justify-center">
                 <button onClick={() => { setAppTab('org'); setActiveCohortScale(null); }} className={`px-4 py-1.5 rounded-brand text-sm font-sans font-semibold transition-all flex items-center gap-1.5 ${appTab === 'org' ? 'bg-white text-red-600 shadow-sm' : 'text-graphite-500 hover:text-graphite-800'}`}>Structure</button>
