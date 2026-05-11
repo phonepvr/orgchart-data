@@ -243,8 +243,9 @@ const codeFor = (level) => {
 };
 
 // --- Row builder ---
-const PHOTO_BASE = 'https://api.dicebear.com/9.x/initials/svg';
-const PHOTO_PARAMS = '&backgroundColor=2E3647&textColor=ffffff';
+// Photo URL is intentionally left blank for every row so the sample template
+// makes zero external requests at render time. Customers who include their
+// own Photo URLs at upload still get them loaded by the browser as before.
 
 const realName = () => {
     const [fn, gender] = pick(FIRST_NAMES);
@@ -320,7 +321,7 @@ const buildRow = ({ level, manager, fnOverride, locOverride, statusOverride }) =
         prom,
         mgrSince: '',
         email: isVacant ? '' : `${name.toLowerCase().replace(/\s+/g, '.')}.${eid.slice(-4)}@example.com`,
-        photo: isVacant ? '' : `${PHOTO_BASE}?seed=${encodeURIComponent(eid)}${PHOTO_PARAMS}`,
+        photo: '',
         matrix: '',
         cohorts: isVacant ? '' : cohortsFor(level),
         status,
