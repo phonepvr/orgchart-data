@@ -719,8 +719,8 @@ const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
                                         style={{ borderLeft: `5px solid ${centralRule}` }}
                                     >
                                         <div className="flex justify-between items-start gap-1 mb-1">
-                                            <div className="font-display font-medium text-lg leading-tight truncate text-graphite-900">{emp._formattedName || (centralTint ? centralTint.label : '')}</div>
-                                            {emp.level && <div className="text-[10px] font-mono font-semibold px-1.5 py-0.5 border border-graphite-400 rounded-brand whitespace-nowrap bg-white">{emp.level}</div>}
+                                            <div className="font-display font-medium text-lg leading-tight truncate text-graphite-900 min-w-0 flex-1">{emp._formattedName || (centralTint ? centralTint.label : '')}</div>
+                                            {emp.level && <div className="text-[10px] font-mono font-semibold px-1.5 py-0.5 border border-graphite-400 rounded-brand whitespace-nowrap flex-shrink-0 bg-white">{emp.level.split(' - ')[0]}</div>}
                                         </div>
                                         <div className="text-[11px] font-sans text-graphite-700 font-medium mb-1.5 truncate">{emp.jobTitle}</div>
                                         {(emp.function1 || emp.location) && (
