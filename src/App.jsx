@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
-import { Upload, Search, Info, Users, User, MapPin, Building2, Clock, CalendarDays, Award, ChevronDown, ChevronRight, ChevronLeft, X, Filter, Plus, Trash2, ArrowUp, ArrowDown, BarChart2, Printer, Mail } from 'lucide-react';
+import { Upload, Search, Info, Users, User, MapPin, Building2, Clock, CalendarDays, Award, ChevronDown, ChevronRight, ChevronLeft, X, Filter, Plus, Trash2, ArrowUp, ArrowDown, BarChart2, Printer, Mail, Armchair } from 'lucide-react';
 
 // --- Template Schema ---
-const REQUIRED_COLUMNS = ['Employee id (EID)', 'Employee name', 'Line Manager EID'];
+const REQUIRED_COLUMNS = ["Employee's Position Code", 'Employee name', "Line Manager's Position Code"];
 const RECOMMENDED_COLUMNS = [
     'Line Manager Name', 'Job Title', 'Level', 'Employee Class',
     'Function 1', 'Function/Plant', 'Location Name', 'Asset', 'Cluster',
@@ -12,8 +12,20 @@ const RECOMMENDED_COLUMNS = [
 ];
 const OPTIONAL_COLUMNS = [
     'Date of Joining', 'Date in Role', 'Date Promoted', 'Manager Since',
-    'Email', 'Photo URL', 'Matrix Manager EID(s)', 'Cohort Tags'
+    'Email', 'Photo URL', 'Matrix Manager EID(s)', 'Cohort Tags', 'Current Status'
 ];
+
+// Status color tokens shared by card, spotlight, table, print
+const STATUS_STYLES = {
+    Active:   { chip: 'bg-leaf/10 text-leaf border-leaf/40',         rule: '#3F9460', label: 'Active' },
+    WIP:      { chip: 'bg-ember/10 text-ember border-ember/40',      rule: '#D9761E', label: 'WIP' },
+    Offered:  { chip: 'bg-signal/10 text-signal border-signal/40',   rule: '#1B5EA6', label: 'Offered' },
+    Vacant:   { chip: 'bg-red-50 text-red-700 border-red-200',       rule: '#B81F1F', label: 'Vacant' },
+};
+const NAME_STATUS_TINT = {
+    approved:   { card: 'bg-graphite-100 border-graphite-300',                printTile: 'bg-[#EBEDF1] border-[#B4BBC8]',   label: 'Approved' },
+    unapproved: { card: 'bg-signal/10 border-signal/40 text-graphite-900',    printTile: 'bg-[#E5EFF8] border-[#5FA1D6]',   label: 'Unapproved' },
+};
 
 // --- Format Helpers ---
 const formatNum = (num) => (num === 0 || num === '0' || !num) ? '-' : num;
@@ -184,16 +196,33 @@ const validateHeaders = (rawRows) => {
 };
 
 // --- Row Normalizer ---
+const NAME_STATUS_VALUES = new Set(['approved', 'unapproved']);
+const VALID_STATUSES = new Set(['Active', 'WIP', 'Offered', 'Vacant']);
+
+const deriveNameStatus = (name) => {
+    const k = String(name || '').trim().toLowerCase();
+    return NAME_STATUS_VALUES.has(k) ? k : null;
+};
+
+const normalizeCurrentStatus = (raw) => {
+    const v = String(raw || '').trim();
+    if (!v) return '';
+    const match = [...VALID_STATUSES].find(s => s.toLowerCase() === v.toLowerCase());
+    return match || v; // pass through unrecognized values; UI shows neutral chip
+};
+
 const normalizeRow = (row) => {
     const get = (key) => {
         const val = row[key];
         if (val === undefined || val === null) return '';
         return typeof val === 'string' ? val.trim() : String(val).trim();
     };
+    const name = get('Employee name');
     return {
-        eid: get('Employee id (EID)'),
-        name: get('Employee name'),
-        managerEid: get('Line Manager EID'),
+        eid: get("Employee's Position Code"),
+        name,
+        _nameStatus: deriveNameStatus(name),
+        managerEid: get("Line Manager's Position Code"),
         managerName: get('Line Manager Name'),
         jobTitle: formatJobTitle(get('Job Title')),
         level: get('Level'),
@@ -216,6 +245,7 @@ const normalizeRow = (row) => {
         photoUrl: get('Photo URL'),
         matrixEids: splitSemicolonList(get('Matrix Manager EID(s)')),
         cohortTags: splitSemicolonList(get('Cohort Tags')),
+        currentStatus: normalizeCurrentStatus(get('Current Status')),
     };
 };
 
@@ -351,6 +381,7 @@ const LockScreen = ({ onUnlock }) => {
 
 // --- Filter Field Definitions (module scope) ---
 const FILTER_FIELD_MAP = {
+    'Current Status': 'currentStatus',
     'Level': 'level',
     'Function 1': 'function1',
     'Function/Plant': 'functionPlant',
@@ -364,15 +395,20 @@ const MULTI_SELECT_FIELDS = [...Object.keys(FILTER_FIELD_MAP), 'Cohort Tag', 'Mg
 const NUMERIC_FIELDS = ['DR Size', 'Total Reportees', 'Team Size'];
 
 // --- Avatar with photo + initials fallback ---
-const Avatar = ({ employee, size = 48, ringClass = '', textClass = 'text-white', bgClass = 'bg-slate-700' }) => {
+const Avatar = ({ employee, size = 48, ringClass = '', textClass = 'text-white', bgClass = 'bg-graphite-700' }) => {
     const [errored, setErrored] = useState(false);
     const initials = employee._initials || buildInitials(employee.name);
     const dim = `${size}px`;
     const showImg = employee.photoUrl && !errored;
+    const isPlaceholder = !showImg && !!employee._nameStatus;
+    const containerClasses = showImg
+        ? 'bg-graphite-100'
+        : (isPlaceholder ? 'bg-graphite-100 text-graphite-500 border border-graphite-300' : `${bgClass} ${textClass}`);
     return (
         <div
-            className={`rounded-full flex-shrink-0 flex items-center justify-center font-bold shadow-sm overflow-hidden ${ringClass} ${showImg ? 'bg-slate-100' : `${bgClass} ${textClass}`}`}
+            className={`rounded-full flex-shrink-0 flex items-center justify-center font-bold shadow-sm overflow-hidden ${ringClass} ${containerClasses}`}
             style={{ width: dim, height: dim }}
+            title={isPlaceholder ? (employee._nameStatus === 'approved' ? 'Approved seat – open' : 'Unapproved seat') : undefined}
         >
             {showImg ? (
                 <img
@@ -383,10 +419,35 @@ const Avatar = ({ employee, size = 48, ringClass = '', textClass = 'text-white',
                     crossOrigin="anonymous"
                     onError={() => setErrored(true)}
                 />
+            ) : isPlaceholder ? (
+                <Armchair size={Math.round(size * 0.5)} strokeWidth={1.5} aria-hidden />
             ) : (
                 <span>{initials}</span>
             )}
         </div>
+    );
+};
+
+const StatusChip = ({ status, size = 'sm' }) => {
+    if (!status) return null;
+    const sty = STATUS_STYLES[status];
+    const cls = sty ? sty.chip : 'bg-graphite-100 text-graphite-700 border-graphite-200';
+    const sizeCls = size === 'xs' ? 'text-[9px] px-1.5 py-0.5' : 'text-[10px] px-2 py-0.5';
+    return (
+        <span className={`inline-flex items-center gap-1 ${sizeCls} font-sans font-bold uppercase tracking-wider rounded-brand border ${cls}`}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: sty ? sty.rule : '#5F6B80' }} />
+            {status}
+        </span>
+    );
+};
+
+const NameStatusChip = ({ nameStatus }) => {
+    if (!nameStatus) return null;
+    const tint = NAME_STATUS_TINT[nameStatus];
+    return (
+        <span className={`inline-flex items-center text-[9px] font-sans font-bold uppercase tracking-wider rounded-brand border px-1.5 py-0.5 ${nameStatus === 'approved' ? 'bg-graphite-100 text-graphite-700 border-graphite-300' : 'bg-signal/10 text-signal border-signal/40'}`}>
+            {tint.label}
+        </span>
     );
 };
 
@@ -472,23 +533,36 @@ const PrintTile = ({ employee, isMatrix, isLineManager, targetLocation }) => {
     const hasAny = !isLineManager && (matrixCount > 0 || directCount > 0 || eaCount > 0);
     const widthClass = isLineManager ? 'w-[220px] max-w-[220px]' : 'w-[160px] max-w-[160px]';
 
+    const statusStyle = STATUS_STYLES[employee.currentStatus];
+    const nameTint = employee._nameStatus ? NAME_STATUS_TINT[employee._nameStatus] : null;
+    const tintStyle = nameTint ? nameTint.printTile : 'bg-white border-graphite-300';
+    const ruleColor = statusStyle ? statusStyle.rule : '#2E3647';
+    const borderStyle = isMatrix ? 'border-2 border-dashed' : 'border';
+
     return (
-        <div className={`p-2 border ${isMatrix ? 'border-2 border-dashed border-slate-400' : 'border border-solid border-slate-400'} bg-white rounded flex flex-col text-slate-800 break-inside-avoid shadow-sm ${widthClass}`}>
+        <div
+            className={`p-2 ${borderStyle} ${tintStyle} rounded-brand flex flex-col text-graphite-900 break-inside-avoid shadow-sm ${widthClass}`}
+            style={{ borderLeft: `4px solid ${ruleColor}` }}
+        >
             <div className="flex justify-between items-start gap-1 mb-0.5">
-                <div className="font-bold text-[11px] leading-tight truncate pr-1">{employee._formattedName}</div>
-                {employee.level && <div className="text-[9px] font-bold px-1 rounded border border-slate-300 whitespace-nowrap flex-shrink-0 bg-slate-50">{employee.level}</div>}
+                <div className="font-display font-medium text-[11px] leading-tight truncate pr-1">{employee._formattedName || (nameTint ? nameTint.label : '')}</div>
+                {employee.level && <div className="text-[9px] font-mono font-semibold px-1 rounded-brand border border-graphite-300 whitespace-nowrap flex-shrink-0 bg-white">{employee.level}</div>}
             </div>
-
-            <div className="text-[9px] text-slate-600 truncate">{employee.jobTitle || ''}</div>
-
+            <div className="text-[9px] font-sans text-graphite-600 truncate">{employee.jobTitle || ''}</div>
             {showLocation && (
-                <div className="text-[8px] text-slate-500 mt-0.5">{employee.location}</div>
+                <div className="text-[8px] font-sans text-graphite-500 mt-0.5">{employee.location}</div>
             )}
-            
+            {(employee.currentStatus || employee._nameStatus || employee._isMgmtCommittee) && (
+                <div className="flex flex-wrap items-center gap-1 mt-1">
+                    {employee.currentStatus && <span className="text-[8px] font-sans font-bold uppercase tracking-wider px-1 py-0.5 rounded-brand border" style={{ color: ruleColor, borderColor: ruleColor, backgroundColor: ruleColor + '14' }}>{employee.currentStatus}</span>}
+                    {employee._nameStatus && <span className="text-[8px] font-sans font-bold uppercase tracking-wider px-1 py-0.5 rounded-brand border border-graphite-400 bg-white text-graphite-700">{nameTint.label}</span>}
+                    {employee._isMgmtCommittee && <span className="text-[8px] font-sans font-bold uppercase tracking-wider px-1 py-0.5 rounded-brand border border-red-300 bg-red-50 text-red-700">MC</span>}
+                </div>
+            )}
             {hasAny && (
-                <div className="flex justify-between items-center text-[9px] font-bold mt-1.5 pt-1 border-t border-slate-200">
-                    {matrixCount > 0 ? <span className="text-slate-600">Matrix: {matrixCount}</span> : <span></span>}
-                    <span className="text-slate-600">{eaCount > 0 ? `${directCount} + EA` : `Direct: ${directCount}`}</span>
+                <div className="flex justify-between items-center text-[9px] font-sans font-bold mt-1.5 pt-1 border-t border-graphite-200">
+                    {matrixCount > 0 ? <span className="text-graphite-600">Matrix: {matrixCount}</span> : <span></span>}
+                    <span className="text-graphite-600">{eaCount > 0 ? `${directCount} + EA` : `Direct: ${directCount}`}</span>
                 </div>
             )}
         </div>
@@ -501,16 +575,39 @@ const PrintGradeList = ({ gradesObj }) => {
     if(entries.length === 0) return null;
     const sorted = entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     return (
-        <div className="flex flex-col gap-y-0.5 text-[10px]">
+        <div className="flex flex-col gap-y-0.5 text-[10px] font-sans">
             {sorted.map(([g, c]) => (
-                <div key={g} className="flex justify-between items-center border-b border-slate-100 pb-0.5">
-                    <span className="text-slate-600 font-medium truncate pr-1">{g}</span>
-                    <span className="font-bold text-slate-900">{c}</span>
+                <div key={g} className="flex justify-between items-center border-b border-graphite-100 pb-0.5">
+                    <span className="text-graphite-600 font-medium truncate pr-1">{g}</span>
+                    <span className="font-bold text-graphite-900 font-mono">{c}</span>
                 </div>
             ))}
         </div>
     );
 };
+
+const PrintLegend = () => (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 items-center text-[8px] font-sans">
+        {Object.entries(STATUS_STYLES).map(([k, v]) => (
+            <span key={k} className="inline-flex items-center gap-1 text-graphite-700">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: v.rule }} />
+                <span className="uppercase tracking-wider font-semibold">{k}</span>
+            </span>
+        ))}
+        <span className="inline-flex items-center gap-1 text-graphite-700">
+            <span className="w-3 h-2 rounded-brand bg-[#EBEDF1] border border-[#B4BBC8]" />
+            <span className="uppercase tracking-wider font-semibold">Approved</span>
+        </span>
+        <span className="inline-flex items-center gap-1 text-graphite-700">
+            <span className="w-3 h-2 rounded-brand bg-[#E5EFF8] border border-[#5FA1D6]" />
+            <span className="uppercase tracking-wider font-semibold">Unapproved</span>
+        </span>
+        <span className="inline-flex items-center gap-1 text-red-700">
+            <span className="w-3 h-2 rounded-brand border border-red-300 bg-red-50" />
+            <span className="uppercase tracking-wider font-semibold">MC</span>
+        </span>
+    </div>
+);
 
 const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
     const rootEmp = employeeMap[rootId];
@@ -525,8 +622,10 @@ const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
         }
     });
 
+    const printedAt = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
     return (
-        <div className="w-full bg-white print:bg-white text-black p-0 m-0">
+        <div className="w-full bg-white print:bg-white text-graphite-900 p-0 m-0 font-sans">
             {pages.map((emp, index) => {
                 const manager = emp._managerId ? employeeMap[emp._managerId] : null;
                 const pageDrs = (emp._directs || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
@@ -535,88 +634,120 @@ const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
                 const hasDrs = pageDrs.length > 0;
                 const hasMatrix = pageMatrix.length > 0;
 
-                // Layout ratio logic
                 let matrixWidthClass = "flex-1";
                 let drWidthClass = "flex-1";
                 if (hasMatrix && hasDrs) {
                     const diff = pageDrs.length - pageMatrix.length;
-                    if (diff >= 4) {
-                        drWidthClass = "flex-[2]";
-                        matrixWidthClass = "flex-1";
-                    } else if (diff <= -4) {
-                        matrixWidthClass = "flex-[2]";
-                        drWidthClass = "flex-1";
-                    }
+                    if (diff >= 4) { drWidthClass = "flex-[2]"; matrixWidthClass = "flex-1"; }
+                    else if (diff <= -4) { matrixWidthClass = "flex-[2]"; drWidthClass = "flex-1"; }
                 }
 
-                return (
-                    <div key={`print-${emp._id}-${index}`} className="w-full min-h-[100vh] py-10 px-8 flex justify-center items-start box-border" style={{ pageBreakAfter: index === pages.length - 1 ? 'auto' : 'always' }}>
-                        <div className="flex gap-8 w-full items-start max-w-7xl justify-center">
-                            
-                            {/* LEFT: Matrix Reports */}
-                            {hasMatrix && (
-                                <div className={`${matrixWidthClass} pt-16 flex flex-col items-center`}>
-                                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4 border-b border-slate-200 pb-1 w-full text-center max-w-[160px]">MATRIX REPORTS</div>
-                                    <div className={`grid gap-3 justify-center ${pageMatrix.length > 4 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                        {pageMatrix.map(m => <PrintTile key={m._id} employee={m} isMatrix />)}
-                                    </div>
-                                </div>
-                            )}
+                const centralStatus = STATUS_STYLES[emp.currentStatus];
+                const centralTint = emp._nameStatus ? NAME_STATUS_TINT[emp._nameStatus] : null;
+                const centralBg = centralTint ? centralTint.printTile : 'bg-white border-graphite-900';
+                const centralRule = centralStatus ? centralStatus.rule : '#0E1219';
 
-                            {/* MIDDLE: Context & Target */}
-                            <div className="w-[240px] flex-shrink-0 flex flex-col items-center">
-                                {manager && (
-                                    <>
-                                        <div className="text-[8px] font-bold uppercase text-slate-400 mb-1 tracking-widest">Line Manager</div>
-                                        <PrintTile employee={manager} isLineManager targetLocation={emp.location} />
-                                        <div className="w-px h-6 bg-slate-300 my-1"></div>
-                                    </>
+                return (
+                    <div key={`print-${emp._id}-${index}`} className="w-full min-h-[100vh] flex flex-col box-border" style={{ pageBreakAfter: index === pages.length - 1 ? 'auto' : 'always' }}>
+                        {/* RED HEADER BAR */}
+                        <div className="w-full bg-red-600 text-white px-8 py-2.5 flex items-center justify-between flex-shrink-0">
+                            <div className="font-display font-medium text-base leading-none">
+                                <span>AM</span><span className="opacity-70 px-0.5">/</span><span>NS</span>
+                                <span className="font-sans uppercase tracking-[0.18em] text-[10px] ml-3 opacity-80">Org Sense · Position Map</span>
+                            </div>
+                            <div className="font-mono text-[10px] opacity-80">Printed {printedAt}</div>
+                        </div>
+
+                        {/* SUBHEADER: page subject */}
+                        <div className="w-full px-8 pt-5 pb-2 border-b border-graphite-100 flex items-end justify-between gap-4 flex-shrink-0">
+                            <div className="min-w-0">
+                                <div className="font-sans uppercase tracking-[0.18em] text-[9px] text-red-600 font-semibold">Position structure</div>
+                                <div className="font-display text-2xl text-graphite-900 leading-tight truncate">{emp._formattedName || (centralTint ? centralTint.label : '')}</div>
+                                <div className="font-sans text-[11px] text-graphite-500 mt-0.5">{[emp.jobTitle, emp.function1, emp.location].filter(Boolean).join(' · ')}</div>
+                            </div>
+                            <PrintLegend />
+                        </div>
+
+                        {/* MAIN CANVAS */}
+                        <div className="flex-1 py-8 px-8 flex justify-center items-start">
+                            <div className="flex gap-8 w-full items-start max-w-7xl justify-center">
+                                {/* LEFT: Matrix Reports */}
+                                {hasMatrix && (
+                                    <div className={`${matrixWidthClass} pt-16 flex flex-col items-center`}>
+                                        <div className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-graphite-500 mb-4 border-b border-graphite-200 pb-1 w-full text-center max-w-[160px]">MATRIX REPORTS</div>
+                                        <div className={`grid gap-3 justify-center ${pageMatrix.length > 4 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                            {pageMatrix.map(m => <PrintTile key={m._id} employee={m} isMatrix />)}
+                                        </div>
+                                    </div>
                                 )}
 
-                                <div className="w-full border-2 border-slate-800 rounded p-3 bg-white mb-6 shadow-sm">
-                                    <div className="flex justify-between items-start gap-1 mb-1">
-                                        <div className="font-black text-base leading-tight truncate">{emp._formattedName}</div>
-                                        {emp.level && <div className="text-[10px] font-bold px-1.5 py-0.5 border border-slate-400 rounded whitespace-nowrap bg-slate-50">{emp.level}</div>}
-                                    </div>
-                                    <div className="text-[11px] text-slate-700 font-medium mb-1.5 truncate">{emp.jobTitle}</div>
-                                    {(emp.function1 || emp.location) && (
-                                        <div className="text-[9px] text-slate-500 mb-2.5">{[emp.function1, emp.location].filter(Boolean).join(' • ')}</div>
+                                {/* MIDDLE: Context & Target */}
+                                <div className="w-[260px] flex-shrink-0 flex flex-col items-center">
+                                    {manager && (
+                                        <>
+                                            <div className="text-[8px] font-mono font-semibold uppercase text-graphite-400 mb-1 tracking-[0.18em]">Line Manager</div>
+                                            <PrintTile employee={manager} isLineManager targetLocation={emp.location} />
+                                            <div className="w-px h-6 bg-graphite-300 my-1"></div>
+                                        </>
                                     )}
-                                    
-                                    {(emp._insights?.matrixCount > 0 || emp._insights?.directCount > 0 || emp._insights?.eaCount > 0) && (
-                                        <div className="flex justify-between mt-2 pt-2 border-t border-slate-300 text-[10px] font-bold">
-                                            {emp._insights?.matrixCount > 0 ? <span className="text-slate-800">Matrix: {emp._insights?.matrixCount}</span> : <span></span>}
-                                            <span className="text-slate-800">{emp._insights?.eaCount > 0 ? `${emp._insights.directCount} + EA` : `Direct: ${emp._insights?.directCount || 0}`}</span>
+
+                                    <div
+                                        className={`w-full ${centralBg} rounded-brand p-3 mb-6 shadow-md border`}
+                                        style={{ borderLeft: `5px solid ${centralRule}` }}
+                                    >
+                                        <div className="flex justify-between items-start gap-1 mb-1">
+                                            <div className="font-display font-medium text-lg leading-tight truncate text-graphite-900">{emp._formattedName || (centralTint ? centralTint.label : '')}</div>
+                                            {emp.level && <div className="text-[10px] font-mono font-semibold px-1.5 py-0.5 border border-graphite-400 rounded-brand whitespace-nowrap bg-white">{emp.level}</div>}
                                         </div>
-                                    )}
+                                        <div className="text-[11px] font-sans text-graphite-700 font-medium mb-1.5 truncate">{emp.jobTitle}</div>
+                                        {(emp.function1 || emp.location) && (
+                                            <div className="text-[9px] font-sans text-graphite-500 mb-2">{[emp.function1, emp.location].filter(Boolean).join(' · ')}</div>
+                                        )}
+                                        <div className="flex flex-wrap gap-1.5 mb-2">
+                                            {emp.currentStatus && centralStatus && <span className="text-[9px] font-sans font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-brand border" style={{ color: centralStatus.rule, borderColor: centralStatus.rule, backgroundColor: centralStatus.rule + '14' }}>{emp.currentStatus}</span>}
+                                            {centralTint && <span className="text-[9px] font-sans font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-brand border border-graphite-400 bg-white text-graphite-700">{centralTint.label}</span>}
+                                            {emp._isMgmtCommittee && <span className="text-[9px] font-sans font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-brand border border-red-300 bg-red-50 text-red-700">Management Committee</span>}
+                                        </div>
+                                        {(emp._insights?.matrixCount > 0 || emp._insights?.directCount > 0 || emp._insights?.eaCount > 0) && (
+                                            <div className="flex justify-between mt-2 pt-2 border-t border-graphite-300 text-[10px] font-sans font-bold">
+                                                {emp._insights?.matrixCount > 0 ? <span className="text-graphite-900">Matrix: {emp._insights?.matrixCount}</span> : <span></span>}
+                                                <span className="text-graphite-900">{emp._insights?.eaCount > 0 ? `${emp._insights.directCount} + EA` : `Direct: ${emp._insights?.directCount || 0}`}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="w-full flex justify-center gap-6 px-2">
+                                        {hasMatrix && (
+                                            <div className="flex-1">
+                                                <div className="text-[9px] font-mono font-semibold uppercase tracking-[0.18em] border-b border-graphite-300 pb-0.5 mb-2 text-graphite-500">Matrix</div>
+                                                <PrintGradeList gradesObj={emp._insights.matrixGrades} />
+                                            </div>
+                                        )}
+                                        {hasDrs && (
+                                            <div className="flex-1">
+                                                <div className="text-[9px] font-mono font-semibold uppercase tracking-[0.18em] border-b border-graphite-300 pb-0.5 mb-2 text-graphite-500">Direct</div>
+                                                <PrintGradeList gradesObj={emp._insights.directGrades} />
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
-                                <div className="w-full flex justify-center gap-6 px-2">
-                                    {hasMatrix && (
-                                        <div className="flex-1">
-                                            <div className="text-[9px] font-bold uppercase tracking-widest border-b border-slate-300 pb-0.5 mb-2 text-slate-500">Matrix</div>
-                                            <PrintGradeList gradesObj={emp._insights.matrixGrades} />
+                                {/* RIGHT: Direct Reports */}
+                                {hasDrs && (
+                                    <div className={`${drWidthClass} pt-16 flex flex-col items-center`}>
+                                        <div className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-graphite-500 mb-4 border-b border-graphite-200 pb-1 w-full text-center max-w-[160px]">DIRECT REPORTS</div>
+                                        <div className={`grid gap-3 justify-center ${pageDrs.length > 4 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                            {pageDrs.map(d => <PrintTile key={d._id} employee={d} />)}
                                         </div>
-                                    )}
-                                    {hasDrs && (
-                                        <div className="flex-1">
-                                            <div className="text-[9px] font-bold uppercase tracking-widest border-b border-slate-300 pb-0.5 mb-2 text-slate-500">Direct</div>
-                                            <PrintGradeList gradesObj={emp._insights.directGrades} />
-                                        </div>
-                                    )}
-                                </div>
+                                    </div>
+                                )}
                             </div>
+                        </div>
 
-                            {/* RIGHT: Direct Reports */}
-                            {hasDrs && (
-                                <div className={`${drWidthClass} pt-16 flex flex-col items-center`}>
-                                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4 border-b border-slate-200 pb-1 w-full text-center max-w-[160px]">DIRECT REPORTS</div>
-                                    <div className={`grid gap-3 justify-center ${pageDrs.length > 4 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                        {pageDrs.map(d => <PrintTile key={d._id} employee={d} />)}
-                                    </div>
-                                </div>
-                            )}
-                            
+                        {/* FOOTER */}
+                        <div className="w-full px-8 py-2 border-t border-graphite-100 flex items-center justify-between flex-shrink-0 text-graphite-500 text-[9px] font-sans">
+                            <span><em className="font-display italic text-red-600 not-italic">Smarter steels, brighter futures.</em> · AM/NS Org Sense</span>
+                            <span className="font-mono">Page {index + 1} of {pages.length}</span>
                         </div>
                     </div>
                 );
@@ -941,10 +1072,13 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
   
   const isTopNode = employee._id === ceoId;
 
-  let cardClasses = "relative w-64 min-w-[16rem] mx-auto bg-white rounded-xl shadow-md border p-4 transition-all duration-200 flex flex-col group ";
+  const nameTint = employee._nameStatus ? NAME_STATUS_TINT[employee._nameStatus] : null;
+  const baseBg = nameTint ? nameTint.card : 'bg-white';
+  let cardClasses = `relative w-64 min-w-[16rem] mx-auto ${baseBg} rounded-xl shadow-md border p-4 transition-all duration-brand-base flex flex-col group `;
   if (isActive) cardClasses += "border-blue-500 ring-4 ring-blue-100 shadow-xl scale-105 cursor-default z-10";
   else if (isMatrixNode) cardClasses += "border-purple-300 border-dashed hover:border-purple-500 hover:shadow-lg cursor-pointer";
-  else cardClasses += "border-slate-200 hover:border-blue-400 hover:shadow-lg cursor-pointer";
+  else if (!nameTint) cardClasses += "border-slate-200 hover:border-blue-400 hover:shadow-lg cursor-pointer";
+  else cardClasses += " hover:shadow-lg cursor-pointer";
 
   let popupHeaderClass = "px-3 py-2 border-b text-xs font-bold uppercase tracking-wider flex justify-between ";
   if (gradeTooltip === 'direct') popupHeaderClass += "bg-blue-100 text-blue-800 border-blue-200";
@@ -968,12 +1102,18 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
         </div>
 
         <div className="flex items-center space-x-3 mb-3 pr-6">
-          <Avatar employee={employee} size={48} bgClass={isActive ? 'bg-blue-600' : isMatrixNode ? 'bg-purple-500' : 'bg-slate-700'} />
+          <Avatar employee={employee} size={48} bgClass={isActive ? 'bg-blue-600' : isMatrixNode ? 'bg-purple-500' : 'bg-graphite-700'} />
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-slate-800 truncate text-sm" title={employee.name}>{employee._formattedName}</h3>
-            <p className="text-xs text-slate-500 truncate mt-0.5" title={employee.jobTitle}>{employee.jobTitle || ''}</p>
+            <h3 className="font-bold text-graphite-900 truncate text-sm" title={employee.name}>{employee._formattedName || (nameTint ? nameTint.label : '')}</h3>
+            <p className="text-xs text-graphite-500 truncate mt-0.5" title={employee.jobTitle}>{employee.jobTitle || ''}</p>
           </div>
         </div>
+        {(employee.currentStatus || employee._nameStatus) && (
+          <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            {employee.currentStatus && <StatusChip status={employee.currentStatus} />}
+            {employee._nameStatus && <NameStatusChip nameStatus={employee._nameStatus} />}
+          </div>
+        )}
 
         <div className="text-xs text-slate-600 bg-slate-50 p-2 rounded-md flex flex-col gap-1.5">
           {(employee.function1 || employee.level) && (
@@ -1070,6 +1210,9 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
                     )}
                     {employee.gender && (
                         <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center"><span className="text-slate-400 font-medium mb-1 text-xs">Gender</span><span className="font-bold text-slate-700">{employee.gender}</span></div>
+                    )}
+                    {employee.currentStatus && (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex flex-col items-center text-center col-span-2 sm:col-span-1"><span className="text-slate-400 font-medium mb-1 text-xs">Position Status</span><StatusChip status={employee.currentStatus} /></div>
                     )}
                 </div>
 
@@ -1305,7 +1448,7 @@ const App = () => {
       // Filter out the template's "Required/Recommended/Optional" category row
       const labelMarkers = new Set(['required', 'recommended', 'optional']);
       const cleanedData = rawData.filter(row => {
-          const eid = String(row['Employee id (EID)'] || '').trim().toLowerCase();
+          const eid = String(row["Employee's Position Code"] || '').trim().toLowerCase();
           return eid && !labelMarkers.has(eid);
       });
       if (cleanedData.length === 0) throw new Error("No employee rows found after parsing.");
@@ -1443,7 +1586,7 @@ const App = () => {
       emp._timeWithManagerFormatted = emp.managerSince ? formatDuration(emp.managerSince) : '';
     });
 
-    // 6. Pick top node: largest team among roots (rows with empty Line Manager EID), prefer MC
+    // 6. Pick top node: largest team among roots (rows with empty Line Manager's Position Code), prefer MC
     const roots = Object.values(empMap).filter(e => !e._managerId);
     let topNode = null;
     if (roots.length > 0) {
@@ -1528,6 +1671,7 @@ const App = () => {
                   switch (config.field) {
                       case 'Employee': valA = a._formattedName; valB = b._formattedName; break;
                       case 'Level': valA = a.level || ''; valB = b.level || ''; break;
+                      case 'Status': valA = a.currentStatus || ''; valB = b.currentStatus || ''; break;
                       case 'JobTitle': valA = a.jobTitle || ''; valB = b.jobTitle || ''; break;
                       case 'Function1': valA = a.function1 || ''; valB = b.function1 || ''; break;
                       case 'Location': valA = a.location || ''; valB = b.location || ''; break;
@@ -1747,9 +1891,9 @@ const App = () => {
                         <div className="w-full pt-4 border-t border-graphite-100">
                             <p className="font-sans text-[11px] text-graphite-500 leading-relaxed">
                                 <span className="font-mono uppercase tracking-wider text-graphite-700">Required:</span>{' '}
-                                <span className="font-mono">Employee id (EID)</span>,{' '}
+                                <span className="font-mono">Employee&apos;s Position Code</span>,{' '}
                                 <span className="font-mono">Employee name</span>,{' '}
-                                <span className="font-mono">Line Manager EID</span>. Every other column is optional and missing fields are simply hidden in the UI.
+                                <span className="font-mono">Line Manager&apos;s Position Code</span>. Every other column is optional and missing fields are simply hidden in the UI.
                             </p>
                         </div>
                         {warnings && warnings.length > 0 && warnings.map((w, i) => (
@@ -1826,9 +1970,13 @@ const App = () => {
                         {isSearchOpen && searchQuery && (
                           <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-brand shadow-xl border border-graphite-100 overflow-hidden z-50">
                             {filteredSearch.length > 0 ? filteredSearch.map(emp => (
-                                <button key={emp._id} className="w-full text-left px-4 py-3 hover:bg-graphite-50 border-b border-graphite-100 last:border-0 flex flex-col" onClick={() => { handleEmployeeSelect(emp._id); setSearchQuery(''); setIsSearchOpen(false); }}>
-                                  <span className="font-sans font-semibold text-graphite-900">{emp._formattedName}</span>
-                                  <span className="text-xs text-graphite-500">{[emp.jobTitle, emp.function1 || emp.location].filter(Boolean).join(' • ')}</span>
+                                <button key={emp._id} className={`w-full text-left px-4 py-3 border-b border-graphite-100 last:border-0 flex items-start gap-2 transition-colors duration-brand-fast ${emp._nameStatus === 'approved' ? 'bg-graphite-50 hover:bg-graphite-100' : emp._nameStatus === 'unapproved' ? 'bg-signal/5 hover:bg-signal/10' : 'hover:bg-graphite-50'}`} onClick={() => { handleEmployeeSelect(emp._id); setSearchQuery(''); setIsSearchOpen(false); }}>
+                                  {emp._nameStatus && <span className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${emp._nameStatus === 'approved' ? 'bg-graphite-400' : 'bg-signal'}`} aria-hidden />}
+                                  <span className="flex flex-col min-w-0 flex-1">
+                                    <span className="font-sans font-semibold text-graphite-900 truncate">{emp._formattedName || (emp._nameStatus ? NAME_STATUS_TINT[emp._nameStatus].label : '')}</span>
+                                    <span className="text-xs text-graphite-500 truncate">{[emp.jobTitle, emp.function1 || emp.location].filter(Boolean).join(' • ')}</span>
+                                  </span>
+                                  {emp.currentStatus && <span className="flex-shrink-0"><StatusChip status={emp.currentStatus} size="xs" /></span>}
                                 </button>
                               )) : <div className="px-4 py-3 text-graphite-500 text-sm">No employees found.</div>}
                           </div>
@@ -2079,6 +2227,7 @@ const App = () => {
                             <thead className="text-slate-600 border-b border-slate-200 sticky top-0 z-10 bg-slate-50 shadow-sm">
                                 <tr>
                                     <SortableHeader label="Employee" field="Employee" sortConfigs={sortConfigs} handleSort={handleSort} />
+                                    <SortableHeader label="Status" field="Status" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="Level" field="Level" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="Job Title" field="JobTitle" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="Function 1" field="Function1" sortConfigs={sortConfigs} handleSort={handleSort} />
@@ -2091,12 +2240,13 @@ const App = () => {
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {tabularSortedData.map((emp) => (
-                                    <tr key={emp._id} id={`table-row-${emp._id}`} className="hover:bg-blue-50/50 bg-white cursor-pointer transition-colors" onClick={() => handleEmployeeSelect(emp._id)}>
-                                        <td className="px-4 py-3"><div className="font-bold text-slate-800 flex items-center gap-1.5"><span className="truncate max-w-[200px]">{emp._formattedName}</span>{emp._isMgmtCommittee && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded uppercase font-bold flex-shrink-0">MC</span>}</div></td>
-                                        <td className="px-4 py-3">{emp.level ? <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-bold border border-slate-200">{emp.level}</span> : <span className="text-slate-400">-</span>}</td>
-                                        <td className="px-4 py-3 text-slate-700"><div className="truncate max-w-[200px]" title={emp.jobTitle}>{emp.jobTitle || ''}</div></td>
-                                        <td className="px-4 py-3 text-slate-600"><div className="truncate max-w-[150px]" title={emp.function1}>{emp.function1 || ''}</div></td>
-                                        <td className="px-4 py-3 text-slate-600"><div className="truncate max-w-[150px]" title={emp.location}>{emp.location || ''}</div></td>
+                                    <tr key={emp._id} id={`table-row-${emp._id}`} className={`cursor-pointer transition-colors duration-brand-fast ${emp._nameStatus === 'approved' ? 'bg-graphite-50 hover:bg-graphite-100' : emp._nameStatus === 'unapproved' ? 'bg-signal/5 hover:bg-signal/10' : 'bg-white hover:bg-blue-50/50'}`} onClick={() => handleEmployeeSelect(emp._id)}>
+                                        <td className="px-4 py-3"><div className="font-bold text-graphite-900 flex items-center gap-1.5"><span className="truncate max-w-[200px]">{emp._formattedName || (emp._nameStatus ? NAME_STATUS_TINT[emp._nameStatus].label : '')}</span>{emp._isMgmtCommittee && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded uppercase font-bold flex-shrink-0">MC</span>}{emp._nameStatus && <NameStatusChip nameStatus={emp._nameStatus} />}</div></td>
+                                        <td className="px-4 py-3">{emp.currentStatus ? <StatusChip status={emp.currentStatus} /> : <span className="text-graphite-300">-</span>}</td>
+                                        <td className="px-4 py-3">{emp.level ? <span className="bg-graphite-100 text-graphite-700 px-1.5 py-0.5 rounded-brand text-[10px] font-bold border border-graphite-200">{emp.level}</span> : <span className="text-graphite-300">-</span>}</td>
+                                        <td className="px-4 py-3 text-graphite-700"><div className="truncate max-w-[200px]" title={emp.jobTitle}>{emp.jobTitle || ''}</div></td>
+                                        <td className="px-4 py-3 text-graphite-600"><div className="truncate max-w-[150px]" title={emp.function1}>{emp.function1 || ''}</div></td>
+                                        <td className="px-4 py-3 text-graphite-600"><div className="truncate max-w-[150px]" title={emp.location}>{emp.location || ''}</div></td>
                                         <td className="px-4 py-3 text-center font-medium text-blue-700">{formatNum(emp._insights?.directCount)}</td>
                                         <td className="px-4 py-3 text-center font-medium text-purple-600">{formatNum(emp._insights?.matrixCount)}</td>
                                         <td className="px-4 py-3 text-center font-medium text-orange-600">{formatNum(emp._insights?.totalTeam)}</td>
