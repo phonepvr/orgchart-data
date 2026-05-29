@@ -19,13 +19,13 @@ const outPath = resolve(here, '..', 'orglens_sample_template.xlsx');
 
 const REQUIRED = ["Employee's Position Code", "Employee name", "Line Manager's Position Code"];
 const RECOMMENDED = [
-    'Line Manager Name', 'Job Title', 'Level', 'Employee Class',
+    'Line Manager Name', 'Position Text', 'Level', 'Employee Class',
     'Function 1', 'Function/Plant', 'Location Name', 'Asset', 'Cluster',
     'Gender', 'Date of Birth', 'HR Manager Name', 'HR Manager EID', 'Management Board EID',
 ];
 const OPTIONAL = [
     'Date of Joining', 'Date in Role', 'Date Promoted', 'Manager Since',
-    'Email', 'Photo URL', 'Matrix Manager EID(s)', 'Cohort Tags', 'Current Status',
+    'Email', 'Photo URL', 'Matrix Manager EID(s)', 'Cohort Tags', 'Current Status/Tag',
 ];
 const HEADERS = [...REQUIRED, ...RECOMMENDED, ...OPTIONAL];
 
@@ -434,7 +434,7 @@ const sample = ROWS.map((r) => ({
     "Employee name": r.name,
     "Line Manager's Position Code": r.mgrEid,
     'Line Manager Name': r.mgrName,
-    'Job Title': r.title,
+    'Position Text': r.title,
     'Level': r.level,
     'Employee Class': r.empClass,
     'Function 1': r.function1,
@@ -455,7 +455,7 @@ const sample = ROWS.map((r) => ({
     'Photo URL': r.photo,
     'Matrix Manager EID(s)': r.matrix,
     'Cohort Tags': r.cohorts,
-    'Current Status': r.status,
+    'Current Status/Tag': r.status,
 }));
 
 const aoa = [HEADERS, tierRow, ...sample.map(row => HEADERS.map(h => row[h]))];
