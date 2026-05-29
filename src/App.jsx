@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
-import { Upload, Search, Info, Users, User, MapPin, Building2, Clock, CalendarDays, Award, ChevronDown, ChevronRight, ChevronLeft, X, Filter, Plus, Trash2, ArrowUp, ArrowDown, BarChart2, Printer, Mail, Armchair } from 'lucide-react';
+import { Upload, Search, Info, Users, User, MapPin, Building2, Clock, CalendarDays, Award, ChevronDown, ChevronRight, ChevronLeft, X, Filter, Plus, Trash2, ArrowUp, ArrowDown, BarChart2, Printer, Mail, Armchair, AlertTriangle } from 'lucide-react';
 
 // --- Template Schema ---
 const REQUIRED_COLUMNS = [
@@ -294,6 +294,23 @@ const PrivacyChip = () => {
         </div>
     );
 };
+
+const DataVerifyBanner = ({ rowCount, onDismiss }) => (
+    <div className="bg-ember/10 border-b border-ember/40 px-6 py-2 flex items-center justify-between gap-4 print:hidden">
+        <div className="flex items-center gap-2 text-ember text-[12px] font-sans leading-snug">
+            <AlertTriangle size={14} className="flex-shrink-0" />
+            <span>
+                <span className="font-semibold">Verify your data before printing or sharing.</span>{' '}
+                This chart reflects the spreadsheet you uploaded
+                {typeof rowCount === 'number' ? ` (${rowCount.toLocaleString()} rows)` : ''}.
+                Cross-check the source for accuracy &mdash; the output is only as correct as the input.
+            </span>
+        </div>
+        <button onClick={onDismiss} className="text-ember/70 hover:text-ember transition-colors flex-shrink-0" aria-label="Dismiss data verification reminder">
+            <X size={14} />
+        </button>
+    </div>
+);
 
 // Per the AM/NS brand sheet (section 04): 5 approved colorways. `light` and
 // `reverse` are kept as aliases for backwards compat with existing call sites.
@@ -808,9 +825,12 @@ const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
                         </div>
 
                         {/* FOOTER */}
-                        <div className="w-full px-8 py-2 border-t border-graphite-100 flex items-center justify-between flex-shrink-0 text-graphite-500 text-[9px] font-sans">
+                        <div className="w-full px-8 pt-2 pb-1 border-t border-graphite-100 flex items-center justify-between flex-shrink-0 text-graphite-500 text-[9px] font-sans">
                             <span className="font-bold uppercase tracking-[0.12em] text-graphite-900">Smarter Steels<span className="text-red-500">.</span> Brighter Futures<span className="text-red-500">.</span> <span className="text-graphite-400 font-normal normal-case tracking-normal">· AM/NS Org Sense</span></span>
                             <span className="font-mono">Page {index + 1} of {pages.length}</span>
+                        </div>
+                        <div className="w-full px-8 pb-2 text-[8px] font-sans italic text-graphite-500 text-center flex-shrink-0">
+                            Data accuracy reminder &mdash; reflects the spreadsheet uploaded into Org Sense. Verify with the source before relying on this chart.
                         </div>
                     </div>
                 );
@@ -1404,6 +1424,8 @@ const App = () => {
   const [warnings, setWarnings] = useState([]);
   const [viewMode, setViewMode] = useState('direct');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // Resets every fresh upload (per handleFileUpload below).
+  const [showDataVerifyBanner, setShowDataVerifyBanner] = useState(true);
 
   const [compareList, setCompareList] = useState({ blue: [], green: [], purple: [], orange: [], red: [] });
   const [contextMenu, setContextMenu] = useState(null);
@@ -1493,7 +1515,7 @@ const App = () => {
   };
 
   const handleFileUpload = async (file) => {
-    setLoading(true); setError(null); setWarnings([]);
+    setLoading(true); setError(null); setWarnings([]); setShowDataVerifyBanner(true);
     try {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
@@ -2057,6 +2079,10 @@ const App = () => {
               )}
             </div>
           </header>
+
+          {showDataVerifyBanner && (
+              <DataVerifyBanner rowCount={data.length} onDismiss={() => setShowDataVerifyBanner(false)} />
+          )}
 
           <main className="flex-1 overflow-hidden flex flex-row w-full relative">
             
