@@ -17,11 +17,14 @@ import { dirname, resolve } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const outPath = resolve(here, '..', 'orglens_sample_template.xlsx');
 
-const REQUIRED = ["Employee's Position Code", "Employee name", "Line Manager's Position Code"];
+const REQUIRED = [
+    "Employee's Position Code", "Employee name", "Line Manager's Position Code",
+    'Position Text', 'Level', 'Function 1', 'Function/Plant', 'Location Name',
+    'Asset', 'HR Manager EID',
+];
 const RECOMMENDED = [
-    'Line Manager Name', 'Position Text', 'Level', 'Employee Class',
-    'Function 1', 'Function/Plant', 'Location Name', 'Asset', 'Cluster',
-    'Gender', 'Date of Birth', 'HR Manager Name', 'HR Manager EID', 'Management Board EID',
+    'Line Manager Name', 'Employee Class',
+    'Cluster', 'Gender', 'Date of Birth', 'HR Manager Name', 'Management Board EID',
 ];
 const OPTIONAL = [
     'Date of Joining', 'Date in Role', 'Date Promoted', 'Manager Since',
