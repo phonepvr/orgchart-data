@@ -4,11 +4,14 @@ import * as XLSX from 'xlsx';
 import { Upload, Search, Info, Users, User, MapPin, Building2, Clock, CalendarDays, Award, ChevronDown, ChevronRight, ChevronLeft, X, Filter, Plus, Trash2, ArrowUp, ArrowDown, BarChart2, Printer, Mail, Armchair } from 'lucide-react';
 
 // --- Template Schema ---
-const REQUIRED_COLUMNS = ["Employee's Position Code", 'Employee name', "Line Manager's Position Code"];
+const REQUIRED_COLUMNS = [
+    "Employee's Position Code", 'Employee name', "Line Manager's Position Code",
+    'Position Text', 'Level', 'Function 1', 'Function/Plant', 'Location Name',
+    'Asset', 'HR Manager EID',
+];
 const RECOMMENDED_COLUMNS = [
-    'Line Manager Name', 'Position Text', 'Level', 'Employee Class',
-    'Function 1', 'Function/Plant', 'Location Name', 'Asset', 'Cluster',
-    'Gender', 'Date of Birth', 'HR Manager Name', 'HR Manager EID', 'Management Board EID'
+    'Line Manager Name', 'Employee Class',
+    'Cluster', 'Gender', 'Date of Birth', 'HR Manager Name', 'Management Board EID'
 ];
 const OPTIONAL_COLUMNS = [
     'Date of Joining', 'Date in Role', 'Date Promoted', 'Manager Since',
@@ -186,7 +189,13 @@ const validateHeaders = (rawRows) => {
         return { ok: false, missingRequired: [...REQUIRED_COLUMNS], missingRecommended: [], missingOptional: [] };
     }
     const headers = Object.keys(rawRows[0]);
-    const has = (col) => headers.includes(col);
+    // Accept legacy header names so files exported before the v3 rename still
+    // pass the Required-column gate.
+    const LEGACY_ALIASES = {
+        'Position Text':       'Job Title',
+        'Current Status/Tag':  'Current Status',
+    };
+    const has = (col) => headers.includes(col) || (LEGACY_ALIASES[col] && headers.includes(LEGACY_ALIASES[col]));
     return {
         ok: REQUIRED_COLUMNS.every(has),
         missingRequired: REQUIRED_COLUMNS.filter(c => !has(c)),
