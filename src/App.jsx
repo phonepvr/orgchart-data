@@ -6,13 +6,13 @@ import { Upload, Search, Info, Users, User, MapPin, Building2, Clock, CalendarDa
 // --- Template Schema ---
 const REQUIRED_COLUMNS = ["Employee's Position Code", 'Employee name', "Line Manager's Position Code"];
 const RECOMMENDED_COLUMNS = [
-    'Line Manager Name', 'Job Title', 'Level', 'Employee Class',
+    'Line Manager Name', 'Position Text', 'Level', 'Employee Class',
     'Function 1', 'Function/Plant', 'Location Name', 'Asset', 'Cluster',
     'Gender', 'Date of Birth', 'HR Manager Name', 'HR Manager EID', 'Management Board EID'
 ];
 const OPTIONAL_COLUMNS = [
     'Date of Joining', 'Date in Role', 'Date Promoted', 'Manager Since',
-    'Email', 'Photo URL', 'Matrix Manager EID(s)', 'Cohort Tags', 'Current Status'
+    'Email', 'Photo URL', 'Matrix Manager EID(s)', 'Cohort Tags', 'Current Status/Tag'
 ];
 
 // Status color tokens shared by card, spotlight, table, print
@@ -224,7 +224,7 @@ const normalizeRow = (row) => {
         _nameStatus: deriveNameStatus(name),
         managerEid: get("Line Manager's Position Code"),
         managerName: get('Line Manager Name'),
-        jobTitle: formatJobTitle(get('Job Title')),
+        jobTitle: formatJobTitle(get('Position Text') || get('Job Title')),
         level: get('Level'),
         employeeClass: get('Employee Class'),
         function1: get('Function 1'),
@@ -245,7 +245,7 @@ const normalizeRow = (row) => {
         photoUrl: get('Photo URL'),
         matrixEids: splitSemicolonList(get('Matrix Manager EID(s)')),
         cohortTags: splitSemicolonList(get('Cohort Tags')),
-        currentStatus: normalizeCurrentStatus(get('Current Status')),
+        currentStatus: normalizeCurrentStatus(get('Current Status/Tag') || get('Current Status')),
     };
 };
 
@@ -286,6 +286,18 @@ const PrivacyChip = () => {
     );
 };
 
+// Per the AM/NS brand sheet (section 04): 5 approved colorways. `light` and
+// `reverse` are kept as aliases for backwards compat with existing call sites.
+const AMNS_VARIANTS = {
+    'red-on-white':   { ink: 'text-graphite-900', sep: 'text-red-500',     sub: 'text-graphite-500' },
+    'black-on-white': { ink: 'text-graphite-900', sep: 'text-graphite-900', sub: 'text-graphite-500' },
+    'red-on-black':   { ink: 'text-white',         sep: 'text-red-500',     sub: 'text-graphite-300' },
+    'white-on-black': { ink: 'text-white',         sep: 'text-red-500',     sub: 'text-graphite-300' },
+    'white-on-red':   { ink: 'text-white',         sep: 'text-graphite-900', sub: 'text-white/80'    },
+    light:            { ink: 'text-graphite-900', sep: 'text-red-500',     sub: 'text-graphite-500' },
+    reverse:          { ink: 'text-white',         sep: 'text-red-500',     sub: 'text-graphite-300' },
+};
+
 const AmnsMark = ({ size = 'md', variant = 'light' }) => {
     const sizes = {
         sm: { mark: 'text-xl', sub: 'text-[8px]', gap: 'mt-0' },
@@ -293,26 +305,41 @@ const AmnsMark = ({ size = 'md', variant = 'light' }) => {
         lg: { mark: 'text-5xl', sub: 'text-[10px]', gap: 'mt-1.5' },
         xl: { mark: 'text-6xl', sub: 'text-[11px]', gap: 'mt-2' },
     }[size];
-    const inkClass = variant === 'reverse' ? 'text-white' : 'text-graphite-900';
-    const subClass = variant === 'reverse' ? 'text-graphite-300' : 'text-graphite-500';
+    const v = AMNS_VARIANTS[variant] || AMNS_VARIANTS.light;
     return (
         <div className="flex flex-col">
-            <div className={`font-display font-medium leading-none tracking-tight ${inkClass} ${sizes.mark}`}>
+            <div className={`font-display font-bold leading-none tracking-tight ${v.ink} ${sizes.mark}`}>
                 <span>AM</span>
-                <span className="text-red-600 px-0.5">/</span>
+                <span className={`${v.sep} px-0.5`}>/</span>
                 <span>NS</span>
             </div>
-            <div className={`${sizes.gap} ${sizes.sub} font-sans font-semibold uppercase tracking-[0.18em] ${subClass}`}>
-                Arcelormittal Nippon Steel India
+            <div className={`${sizes.gap} ${sizes.sub} font-sans font-semibold uppercase tracking-[0.18em] ${v.sub}`}>
+                ArcelorMittal Nippon Steel India
             </div>
         </div>
     );
 };
 
-// Hero pull-quote in brand voice
+// Section 06 of the brand sheet — forward-diagonal accent. Smart Red by
+// default; pure white / strong black are the only other permitted fills.
+// `viewBox` is set so the stroke scales cleanly via Tailwind w-* / h-* on
+// the wrapper. Never reverse or break the angle.
+const BrandStroke = ({ className = '', tone = 'red' }) => {
+    const fill = tone === 'white' ? '#FFFFFF' : tone === 'black' ? '#000000' : '#E52726';
+    return (
+        <svg viewBox="0 0 120 40" preserveAspectRatio="none" className={className} aria-hidden>
+            <polygon fill={fill} points="20,0 50,0 30,40 0,40" />
+            <polygon fill={fill} points="80,0 110,0 90,40 60,40" />
+        </svg>
+    );
+};
+
+// Canonical tagline per the brand sheet masthead: ALL CAPS, Albert Sans
+// Bold, with Smart Red full-stops. Used in lock screen, upload screen, and
+// the print footer.
 const BrandTagline = ({ className = '' }) => (
-    <h1 className={`font-display font-normal leading-[1.1] text-graphite-900 ${className}`}>
-        Smarter steels, <em className="text-red-600 not-italic font-display italic">brighter futures.</em>
+    <h1 className={`font-sans font-bold uppercase tracking-[0.12em] leading-[1.1] text-graphite-900 ${className}`}>
+        Smarter Steels<span className="text-red-500">.</span> Brighter Futures<span className="text-red-500">.</span>
     </h1>
 );
 
@@ -344,15 +371,16 @@ const LockScreen = ({ onUnlock }) => {
         <div className="h-screen w-full flex bg-white text-graphite-900 overflow-hidden">
             {/* LEFT: brand panel */}
             <div className="hidden md:flex md:w-1/2 lg:w-3/5 bg-graphite-900 text-white flex-col justify-between p-12 lg:p-16 relative overflow-hidden">
+                <BrandStroke aria-hidden className="absolute top-0 right-0 h-32 w-64 opacity-90" />
                 <div className="relative z-10">
                     <AmnsMark size="md" variant="reverse" />
                 </div>
                 <div className="relative z-10 max-w-xl">
                     <p className="font-sans font-semibold text-red-400 text-[11px] uppercase tracking-[0.18em] mb-5">#SmarterSteelsBrighterFutures</p>
-                    <h1 className="font-display font-normal text-5xl lg:text-6xl leading-[1.05] mb-4">
-                        Smarter steels, <em className="text-red-500 not-italic font-display italic">brighter futures.</em>
+                    <h1 className="font-sans font-bold uppercase tracking-[0.08em] text-5xl lg:text-6xl leading-[1.05] mb-4">
+                        Smarter Steels<span className="text-red-500">.</span><br/>Brighter Futures<span className="text-red-500">.</span>
                     </h1>
-                    <p className="font-display italic text-graphite-300 text-2xl lg:text-3xl leading-snug">Reimagineering Bharat.</p>
+                    <p className="font-sans italic text-graphite-300 text-2xl lg:text-3xl leading-snug">Reimagineering Bharat.</p>
                 </div>
                 <div className="relative z-10 flex items-end justify-between text-graphite-300">
                     <p className="font-sans text-xs leading-relaxed max-w-xs">
@@ -404,7 +432,7 @@ const LockScreen = ({ onUnlock }) => {
 
 // --- Filter Field Definitions (module scope) ---
 const FILTER_FIELD_MAP = {
-    'Current Status': 'currentStatus',
+    'Current Status/Tag': 'currentStatus',
     'Level': 'level',
     'Function 1': 'function1',
     'Function/Plant': 'functionPlant',
@@ -548,8 +576,7 @@ const SortableHeader = ({ label, field, align = 'left', width = '', sortConfigs,
 };
 
 // --- Print Layout Components ---
-const PrintTile = ({ employee, isMatrix, isLineManager, targetLocation }) => {
-    const showLocation = isLineManager && employee.location && employee.location !== targetLocation;
+const PrintTile = ({ employee, isMatrix, isLineManager }) => {
     const matrixCount = employee._insights?.matrixCount || 0;
     const directCount = employee._insights?.directCount || 0;
     const eaCount = employee._insights?.eaCount || 0;
@@ -571,9 +598,11 @@ const PrintTile = ({ employee, isMatrix, isLineManager, targetLocation }) => {
                 <div className="font-display font-medium text-[11px] leading-tight truncate pr-1 min-w-0 flex-1">{employee._formattedName || (nameTint ? nameTint.label : '')}</div>
                 {employee.level && <div className="text-[9px] font-mono font-semibold px-1 rounded-brand border border-graphite-300 whitespace-nowrap flex-shrink-0 bg-white">{employee.level.split(' - ')[0]}</div>}
             </div>
-            <div className="text-[9px] font-sans text-graphite-600 truncate">{employee.jobTitle || ''}</div>
-            {showLocation && (
-                <div className="text-[8px] font-sans text-graphite-500 mt-0.5">{employee.location}</div>
+            <div className="text-[9px] font-sans text-graphite-600 line-clamp-2 leading-snug" title={employee.jobTitle}>{employee.jobTitle || ''}</div>
+            {(employee.function1 || employee.location) && (
+                <div className="text-[8px] font-sans text-graphite-500 truncate mt-0.5">
+                    {[employee.function1, employee.location].filter(Boolean).join(' · ')}
+                </div>
             )}
             {(employee.currentStatus || employee._nameStatus || employee._isMgmtCommittee) && (
                 <div className="flex flex-wrap items-center gap-1 mt-1">
@@ -672,13 +701,15 @@ const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
 
                 return (
                     <div key={`print-${emp._id}-${index}`} className="w-full min-h-[100vh] flex flex-col box-border" style={{ pageBreakAfter: index === pages.length - 1 ? 'auto' : 'always' }}>
+                        {/* BRAND STRIPE — Smart Red + Strong Black per brand sheet section 06 */}
+                        <div className="print-brand-stripe w-full" aria-hidden />
                         {/* RED HEADER BAR */}
-                        <div className="w-full bg-red-600 text-white px-8 py-2.5 flex items-center justify-between flex-shrink-0">
-                            <div className="font-display font-medium text-base leading-none">
-                                <span>AM</span><span className="opacity-70 px-0.5">/</span><span>NS</span>
-                                <span className="font-sans uppercase tracking-[0.18em] text-[10px] ml-3 opacity-80">Org Sense · Position Map</span>
+                        <div className="w-full bg-red-500 text-white px-8 py-2.5 flex items-center justify-between flex-shrink-0">
+                            <div className="font-display font-bold text-base leading-none">
+                                <span>AM</span><span className="opacity-80 px-0.5">/</span><span>NS</span>
+                                <span className="font-sans uppercase tracking-[0.18em] text-[10px] ml-3 opacity-90">Org Sense · Position Map</span>
                             </div>
-                            <div className="font-mono text-[10px] opacity-80">Printed {printedAt}</div>
+                            <div className="font-mono text-[10px] opacity-90">Printed {printedAt}</div>
                         </div>
 
                         {/* SUBHEADER: page subject */}
@@ -709,7 +740,7 @@ const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
                                     {manager && (
                                         <>
                                             <div className="text-[8px] font-mono font-semibold uppercase text-graphite-400 mb-1 tracking-[0.18em]">Line Manager</div>
-                                            <PrintTile employee={manager} isLineManager targetLocation={emp.location} />
+                                            <PrintTile employee={manager} isLineManager />
                                             <div className="w-px h-6 bg-graphite-300 my-1"></div>
                                         </>
                                     )}
@@ -769,7 +800,7 @@ const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
 
                         {/* FOOTER */}
                         <div className="w-full px-8 py-2 border-t border-graphite-100 flex items-center justify-between flex-shrink-0 text-graphite-500 text-[9px] font-sans">
-                            <span><em className="font-display italic text-red-600 not-italic">Smarter steels, brighter futures.</em> · AM/NS Org Sense</span>
+                            <span className="font-bold uppercase tracking-[0.12em] text-graphite-900">Smarter Steels<span className="text-red-500">.</span> Brighter Futures<span className="text-red-500">.</span> <span className="text-graphite-400 font-normal normal-case tracking-normal">· AM/NS Org Sense</span></span>
                             <span className="font-mono">Page {index + 1} of {pages.length}</span>
                         </div>
                     </div>
@@ -1130,7 +1161,7 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
           <Avatar employee={employee} size={48} bgClass={isActive ? 'bg-blue-600' : isMatrixNode ? 'bg-purple-500' : 'bg-graphite-700'} />
           <div className="flex-1 min-w-0">
             <h3 className="font-bold text-graphite-900 truncate text-sm" title={employee.name}>{employee._formattedName || (nameTint ? nameTint.label : '')}</h3>
-            <p className="text-xs text-graphite-500 truncate mt-0.5" title={employee.jobTitle}>{employee.jobTitle || ''}</p>
+            <p className="text-xs text-graphite-500 line-clamp-2 mt-0.5 leading-snug min-h-[2.25em]" title={employee.jobTitle}>{employee.jobTitle || ''}</p>
           </div>
         </div>
         {(employee.currentStatus || employee._nameStatus) && (
@@ -1153,14 +1184,9 @@ function EmployeeCard({ employee, ceoId, globalMetrics, isActive, isMatrixNode, 
                   )}
               </div>
           )}
-          {(employee.location || employee._tenureFormatted) && (
-              <div className="flex items-center justify-between">
-                  {employee.location ? (
-                      <div className="flex items-center space-x-1 truncate pr-2"><MapPin size={12} className="flex-shrink-0"/> <span className="truncate">{employee.location}</span></div>
-                  ) : <span/>}
-                  {employee._tenureFormatted && (
-                      <div className="flex items-center space-x-1 text-slate-500 flex-shrink-0 font-medium"><Clock size={12} /> <TenureDisplay employee={employee} /></div>
-                  )}
+          {employee.location && (
+              <div className="flex items-center space-x-1 truncate">
+                  <MapPin size={12} className="flex-shrink-0"/> <span className="truncate">{employee.location}</span>
               </div>
           )}
         </div>
@@ -1882,13 +1908,16 @@ const App = () => {
       <div className="h-screen w-full bg-graphite-50 flex flex-col">
         <header className="px-8 py-5 border-b border-graphite-100 bg-white flex items-center justify-between flex-shrink-0">
             <AmnsMark size="sm" />
-            <span className="font-mono text-[10px] text-graphite-400 hidden md:inline">Org Sense · v1.0</span>
+            <div className="flex items-center gap-4">
+                <BrandStroke className="h-5 w-16 hidden md:inline-block" />
+                <span className="font-mono text-[10px] text-graphite-400 hidden md:inline">Org Sense · v1.0</span>
+            </div>
         </header>
         <main className="flex-1 overflow-y-auto flex items-center justify-center p-6">
             <div className="w-full max-w-2xl">
                 <p className="font-sans font-semibold text-red-600 text-[11px] uppercase tracking-[0.18em] mb-3">Step 01 · Upload</p>
-                <h1 className="font-display text-4xl md:text-5xl text-graphite-900 leading-[1.1] mb-3">
-                    Upload your <em className="text-red-600 not-italic font-display italic">organisation file.</em>
+                <h1 className="font-display font-bold text-4xl md:text-5xl text-graphite-900 leading-[1.1] mb-3">
+                    Upload your <span className="text-red-500">organisation file.</span>
                 </h1>
                 <p className="font-sans text-graphite-500 text-[15px] leading-relaxed mb-8 max-w-xl">
                     Drop in the AM/NS sample template populated with your employee data, or any Excel file with the same headers. Parsing happens in this browser — nothing is uploaded, and a refresh clears everything.
@@ -1946,6 +1975,10 @@ const App = () => {
             @page { size: landscape; margin: 8mm; }
             html, body { background-color: white !important; margin: 0; padding: 0; }
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+        .print-brand-stripe {
+            height: 4px;
+            background: linear-gradient(90deg, #E52726 0%, #E52726 62%, transparent 62%, transparent 66%, #000000 66%, #000000 100%);
         }
       `}} />
 
@@ -2255,7 +2288,7 @@ const App = () => {
                                     <SortableHeader label="Employee" field="Employee" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="Status" field="Status" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="Level" field="Level" sortConfigs={sortConfigs} handleSort={handleSort} />
-                                    <SortableHeader label="Job Title" field="JobTitle" sortConfigs={sortConfigs} handleSort={handleSort} />
+                                    <SortableHeader label="Position Text" field="JobTitle" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="Function 1" field="Function1" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="Location" field="Location" sortConfigs={sortConfigs} handleSort={handleSort} />
                                     <SortableHeader label="DR" field="DRSize" align="center" sortConfigs={sortConfigs} handleSort={handleSort} />
