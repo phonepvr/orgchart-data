@@ -687,27 +687,77 @@ const PrintLegend = () => (
     </div>
 );
 
+// Deterministic per-page capacity budget (no DOM measurement). See plan:
+// A4 landscape inner area ~281x194mm; tile ~30mm tall + gap => ~4 rows/col.
+const NORMAL_PAGE_CAP = 8;        // subject page: 2 cols x 4 rows in the side pane
+const CONTINUATION_PAGE_CAP = 16; // continuation page: 4 cols x 4 rows full-width
+
+// Smart column count for the subject-page side panes (0-12 only; above that we paginate).
+const sideColumns = (n) => (n <= 4 ? 1 : 2);
+
+// Pure function: split one subject's reports across a 'subject' page plus
+// 'continuation' pages. Returns a list of page descriptors:
+//   { kind, subject, drs, matrix, drStart, drTotal }
+const planSubjectPages = (subject, employeeMap, ceoId) => {
+    const drs = (subject._directs || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
+    const matrix = (subject._matrix || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
+
+    // When there's no matrix the DR pane gets the whole canvas and fits more;
+    // when matrix is present the side panes share the canvas, so cap tighter.
+    const firstPageDrCap = matrix.length > 0 ? NORMAL_PAGE_CAP : NORMAL_PAGE_CAP + 4; // 12
+
+    // TODO: matrix overflow continuation is out of scope. If matrix.length
+    // exceeds NORMAL_PAGE_CAP the surplus is clipped by .print-page overflow.
+    // Extremely rare in current data; add matrix continuation pages if a real
+    // customer hits it.
+
+    const firstChunk = drs.slice(0, firstPageDrCap);
+    const overflow = drs.slice(firstPageDrCap);
+
+    const pages = [{
+        kind: 'subject',
+        subject,
+        drs: firstChunk,
+        matrix,
+        drStart: 0,
+        drTotal: drs.length,
+    }];
+
+    for (let i = 0; i < overflow.length; i += CONTINUATION_PAGE_CAP) {
+        pages.push({
+            kind: 'continuation',
+            subject,
+            drs: overflow.slice(i, i + CONTINUATION_PAGE_CAP),
+            matrix: [],
+            drStart: firstPageDrCap + i,
+            drTotal: drs.length,
+        });
+    }
+    return pages;
+};
+
 const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
     const rootEmp = employeeMap[rootId];
     if (!rootEmp) return null;
 
-    const pages = [rootEmp];
     const rootDrs = (rootEmp._directs || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
-    
-    rootDrs.forEach(dr => {
-        if ((dr._insights?.directCount || 0) > 0 || (dr._insights?.matrixCount || 0) > 0) {
-            pages.push(dr);
-        }
-    });
+
+    const subjectsToPrint = [
+        rootEmp,
+        ...rootDrs.filter(dr => (dr._insights?.directCount || 0) > 0 || (dr._insights?.matrixCount || 0) > 0),
+    ];
+    const pages = subjectsToPrint.flatMap(s => planSubjectPages(s, employeeMap, ceoId));
 
     const printedAt = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     return (
         <div className="w-full bg-white print:bg-white text-graphite-900 p-0 m-0 font-sans">
-            {pages.map((emp, index) => {
+            {pages.map((page, index) => {
+                const emp = page.subject;
+                const isContinuation = page.kind === 'continuation';
                 const manager = emp._managerId ? employeeMap[emp._managerId] : null;
-                const pageDrs = (emp._directs || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
-                const pageMatrix = (emp._matrix || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
+                const pageDrs = page.drs;
+                const pageMatrix = page.matrix || [];
 
                 const hasDrs = pageDrs.length > 0;
                 const hasMatrix = pageMatrix.length > 0;
@@ -725,8 +775,10 @@ const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
                 const centralBg = centralTint ? centralTint.printTile : 'bg-white border-graphite-900';
                 const centralRule = centralStatus ? centralStatus.rule : '#0E1219';
 
+                const isLast = index === pages.length - 1;
+
                 return (
-                    <div key={`print-${emp._id}-${index}`} className="w-full min-h-[100vh] flex flex-col box-border" style={{ pageBreakAfter: index === pages.length - 1 ? 'auto' : 'always' }}>
+                    <div key={`print-${emp._id}-${page.kind}-${page.drStart}-${index}`} className="print-page flex flex-col box-border bg-white" style={{ pageBreakAfter: isLast ? 'auto' : 'always' }}>
                         {/* BRAND STRIPE — Smart Red + Strong Black per brand sheet section 06 */}
                         <div className="print-brand-stripe w-full" aria-hidden />
                         {/* RED HEADER BAR */}
@@ -738,91 +790,127 @@ const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
                             <div className="font-mono text-[10px] opacity-90">Printed {printedAt}</div>
                         </div>
 
-                        {/* SUBHEADER: page subject */}
-                        <div className="w-full px-8 pt-5 pb-2 border-b border-graphite-100 flex items-end justify-between gap-4 flex-shrink-0">
-                            <div className="min-w-0">
-                                <div className="font-sans uppercase tracking-[0.18em] text-[9px] text-red-600 font-semibold">Position structure</div>
-                                <div className="font-display text-2xl text-graphite-900 leading-tight truncate">{emp._formattedName || (centralTint ? centralTint.label : '')}</div>
-                                <div className="font-sans text-[11px] text-graphite-500 mt-0.5">{[emp.jobTitle, emp.function1, emp.location].filter(Boolean).join(' · ')}</div>
+                        {isContinuation ? (
+                            /* SLIM SUBJECT BANNER for continuation pages */
+                            <div className="w-full px-8 pt-3 pb-2 border-b border-graphite-100 flex items-end justify-between gap-4 flex-shrink-0">
+                                <div className="min-w-0">
+                                    <div className="font-sans uppercase tracking-[0.18em] text-[9px] text-red-600 font-semibold">Direct Reports · continued</div>
+                                    <div className="font-display text-lg text-graphite-900 leading-tight truncate">{[emp._formattedName || (centralTint ? centralTint.label : ''), emp.jobTitle].filter(Boolean).join(' — ')}</div>
+                                    <div className="font-sans text-[10px] text-graphite-500 mt-0.5">Showing reports {page.drStart + 1}–{page.drStart + pageDrs.length} of {page.drTotal}</div>
+                                </div>
+                                <PrintLegend />
                             </div>
-                            <PrintLegend />
-                        </div>
+                        ) : (
+                            /* SUBHEADER: page subject */
+                            <div className="w-full px-8 pt-5 pb-2 border-b border-graphite-100 flex items-end justify-between gap-4 flex-shrink-0">
+                                <div className="min-w-0">
+                                    <div className="font-sans uppercase tracking-[0.18em] text-[9px] text-red-600 font-semibold">Position structure</div>
+                                    <div className="font-display text-2xl text-graphite-900 leading-tight truncate">{emp._formattedName || (centralTint ? centralTint.label : '')}</div>
+                                    <div className="font-sans text-[11px] text-graphite-500 mt-0.5">{[emp.jobTitle, emp.function1, emp.location].filter(Boolean).join(' · ')}</div>
+                                    {page.drTotal > pageDrs.length && (
+                                        <div className="font-mono text-[9px] text-graphite-400 mt-0.5">Direct Reports: showing first {pageDrs.length} of {page.drTotal} · continues over</div>
+                                    )}
+                                </div>
+                                <PrintLegend />
+                            </div>
+                        )}
 
-                        {/* MAIN CANVAS */}
-                        <div className="flex-1 py-8 px-8 flex justify-center items-start">
-                            <div className="flex gap-8 w-full items-start max-w-7xl justify-center">
-                                {/* LEFT: Matrix Reports */}
-                                {hasMatrix && (
-                                    <div className={`${matrixWidthClass} pt-16 flex flex-col items-center`}>
-                                        <div className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-graphite-500 mb-4 border-b border-graphite-200 pb-1 w-full text-center max-w-[160px]">MATRIX REPORTS</div>
-                                        <div className={`grid gap-3 justify-center ${pageMatrix.length > 4 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                            {pageMatrix.map(m => <PrintTile key={m._id} employee={m} isMatrix />)}
+                        {isContinuation ? (
+                            /* CONTINUATION CANVAS: full-width 4-column DR grid */
+                            <div className="flex-1 py-6 px-8 flex justify-center items-start">
+                                <div className="grid grid-cols-4 gap-3 justify-center">
+                                    {pageDrs.map(d => (
+                                        <div key={d._id} style={{ pageBreakInside: 'avoid' }}>
+                                            <PrintTile employee={d} />
                                         </div>
-                                    </div>
-                                )}
-
-                                {/* MIDDLE: Context & Target */}
-                                <div className="w-[260px] flex-shrink-0 flex flex-col items-center">
-                                    {manager && (
-                                        <>
-                                            <div className="text-[8px] font-mono font-semibold uppercase text-graphite-400 mb-1 tracking-[0.18em]">Line Manager</div>
-                                            <PrintTile employee={manager} isLineManager />
-                                            <div className="w-px h-6 bg-graphite-300 my-1"></div>
-                                        </>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            /* MAIN CANVAS */
+                            <div className="flex-1 py-8 px-8 flex justify-center items-start">
+                                <div className="flex gap-8 w-full items-start max-w-7xl justify-center">
+                                    {/* LEFT: Matrix Reports */}
+                                    {hasMatrix && (
+                                        <div className={`${matrixWidthClass} pt-16 flex flex-col items-center`}>
+                                            <div className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-graphite-500 mb-4 border-b border-graphite-200 pb-1 w-full text-center max-w-[160px]">MATRIX REPORTS</div>
+                                            <div className={`grid gap-3 justify-center ${sideColumns(pageMatrix.length) === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                                {pageMatrix.map(m => (
+                                                    <div key={m._id} style={{ pageBreakInside: 'avoid' }}>
+                                                        <PrintTile employee={m} isMatrix />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     )}
 
-                                    <div
-                                        className={`w-full ${centralBg} rounded-brand p-3 mb-6 shadow-md border`}
-                                        style={{ borderLeft: `5px solid ${centralRule}` }}
-                                    >
-                                        <div className="flex justify-between items-start gap-1 mb-1">
-                                            <div className="font-display font-medium text-lg leading-tight truncate text-graphite-900 min-w-0 flex-1">{emp._formattedName || (centralTint ? centralTint.label : '')}</div>
-                                            {emp.level && <div className="text-[10px] font-mono font-semibold px-1.5 py-0.5 border border-graphite-400 rounded-brand whitespace-nowrap flex-shrink-0 bg-white">{emp.level.split(' - ')[0]}</div>}
-                                        </div>
-                                        <div className="text-[11px] font-sans text-graphite-700 font-medium mb-1.5 truncate">{emp.jobTitle}</div>
-                                        {(emp.function1 || emp.location) && (
-                                            <div className="text-[9px] font-sans text-graphite-500 mb-2">{[emp.function1, emp.location].filter(Boolean).join(' · ')}</div>
+                                    {/* MIDDLE: Context & Target */}
+                                    <div className="w-[260px] flex-shrink-0 flex flex-col items-center">
+                                        {manager && (
+                                            <>
+                                                <div className="text-[8px] font-mono font-semibold uppercase text-graphite-400 mb-1 tracking-[0.18em]">Line Manager</div>
+                                                <PrintTile employee={manager} isLineManager />
+                                                <div className="w-px h-6 bg-graphite-300 my-1"></div>
+                                            </>
                                         )}
-                                        <div className="flex flex-wrap gap-1.5 mb-2">
-                                            {emp.currentStatus && centralStatus && <span className="text-[9px] font-sans font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-brand border" style={{ color: centralStatus.rule, borderColor: centralStatus.rule, backgroundColor: centralStatus.rule + '14' }}>{emp.currentStatus}</span>}
-                                            {centralTint && <span className="text-[9px] font-sans font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-brand border border-graphite-400 bg-white text-graphite-700">{centralTint.label}</span>}
-                                            {emp._isMgmtCommittee && <span className="text-[9px] font-sans font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-brand border border-red-300 bg-red-50 text-red-700">Management Committee</span>}
-                                        </div>
-                                        {(emp._insights?.matrixCount > 0 || emp._insights?.directCount > 0 || emp._insights?.eaCount > 0) && (
-                                            <div className="flex justify-between mt-2 pt-2 border-t border-graphite-300 text-[10px] font-sans font-bold">
-                                                {emp._insights?.matrixCount > 0 ? <span className="text-graphite-900">Matrix: {emp._insights?.matrixCount}</span> : <span></span>}
-                                                <span className="text-graphite-900">{emp._insights?.eaCount > 0 ? `${emp._insights.directCount} + EA` : `Direct: ${emp._insights?.directCount || 0}`}</span>
+
+                                        <div
+                                            className={`w-full ${centralBg} rounded-brand p-3 mb-6 shadow-md border`}
+                                            style={{ borderLeft: `5px solid ${centralRule}` }}
+                                        >
+                                            <div className="flex justify-between items-start gap-1 mb-1">
+                                                <div className="font-display font-medium text-lg leading-tight truncate text-graphite-900 min-w-0 flex-1">{emp._formattedName || (centralTint ? centralTint.label : '')}</div>
+                                                {emp.level && <div className="text-[10px] font-mono font-semibold px-1.5 py-0.5 border border-graphite-400 rounded-brand whitespace-nowrap flex-shrink-0 bg-white">{emp.level.split(' - ')[0]}</div>}
                                             </div>
-                                        )}
+                                            <div className="text-[11px] font-sans text-graphite-700 font-medium mb-1.5 truncate">{emp.jobTitle}</div>
+                                            {(emp.function1 || emp.location) && (
+                                                <div className="text-[9px] font-sans text-graphite-500 mb-2">{[emp.function1, emp.location].filter(Boolean).join(' · ')}</div>
+                                            )}
+                                            <div className="flex flex-wrap gap-1.5 mb-2">
+                                                {emp.currentStatus && centralStatus && <span className="text-[9px] font-sans font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-brand border" style={{ color: centralStatus.rule, borderColor: centralStatus.rule, backgroundColor: centralStatus.rule + '14' }}>{emp.currentStatus}</span>}
+                                                {centralTint && <span className="text-[9px] font-sans font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-brand border border-graphite-400 bg-white text-graphite-700">{centralTint.label}</span>}
+                                                {emp._isMgmtCommittee && <span className="text-[9px] font-sans font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-brand border border-red-300 bg-red-50 text-red-700">Management Committee</span>}
+                                            </div>
+                                            {(emp._insights?.matrixCount > 0 || emp._insights?.directCount > 0 || emp._insights?.eaCount > 0) && (
+                                                <div className="flex justify-between mt-2 pt-2 border-t border-graphite-300 text-[10px] font-sans font-bold">
+                                                    {emp._insights?.matrixCount > 0 ? <span className="text-graphite-900">Matrix: {emp._insights?.matrixCount}</span> : <span></span>}
+                                                    <span className="text-graphite-900">{emp._insights?.eaCount > 0 ? `${emp._insights.directCount} + EA` : `Direct: ${emp._insights?.directCount || 0}`}</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="w-full flex justify-center gap-6 px-2">
+                                            {hasMatrix && (
+                                                <div className="flex-1">
+                                                    <div className="text-[9px] font-mono font-semibold uppercase tracking-[0.18em] border-b border-graphite-300 pb-0.5 mb-2 text-graphite-500">Matrix</div>
+                                                    <PrintGradeList gradesObj={emp._insights.matrixGrades} />
+                                                </div>
+                                            )}
+                                            {hasDrs && (
+                                                <div className="flex-1">
+                                                    <div className="text-[9px] font-mono font-semibold uppercase tracking-[0.18em] border-b border-graphite-300 pb-0.5 mb-2 text-graphite-500">Direct</div>
+                                                    <PrintGradeList gradesObj={emp._insights.directGrades} />
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
 
-                                    <div className="w-full flex justify-center gap-6 px-2">
-                                        {hasMatrix && (
-                                            <div className="flex-1">
-                                                <div className="text-[9px] font-mono font-semibold uppercase tracking-[0.18em] border-b border-graphite-300 pb-0.5 mb-2 text-graphite-500">Matrix</div>
-                                                <PrintGradeList gradesObj={emp._insights.matrixGrades} />
+                                    {/* RIGHT: Direct Reports */}
+                                    {hasDrs && (
+                                        <div className={`${drWidthClass} pt-16 flex flex-col items-center`}>
+                                            <div className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-graphite-500 mb-4 border-b border-graphite-200 pb-1 w-full text-center max-w-[160px]">DIRECT REPORTS</div>
+                                            <div className={`grid gap-3 justify-center ${sideColumns(pageDrs.length) === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                                {pageDrs.map(d => (
+                                                    <div key={d._id} style={{ pageBreakInside: 'avoid' }}>
+                                                        <PrintTile employee={d} />
+                                                    </div>
+                                                ))}
                                             </div>
-                                        )}
-                                        {hasDrs && (
-                                            <div className="flex-1">
-                                                <div className="text-[9px] font-mono font-semibold uppercase tracking-[0.18em] border-b border-graphite-300 pb-0.5 mb-2 text-graphite-500">Direct</div>
-                                                <PrintGradeList gradesObj={emp._insights.directGrades} />
-                                            </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* RIGHT: Direct Reports */}
-                                {hasDrs && (
-                                    <div className={`${drWidthClass} pt-16 flex flex-col items-center`}>
-                                        <div className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-graphite-500 mb-4 border-b border-graphite-200 pb-1 w-full text-center max-w-[160px]">DIRECT REPORTS</div>
-                                        <div className={`grid gap-3 justify-center ${pageDrs.length > 4 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                            {pageDrs.map(d => <PrintTile key={d._id} employee={d} />)}
-                                        </div>
-                                    </div>
-                                )}
                             </div>
-                        </div>
+                        )}
 
                         {/* FOOTER */}
                         <div className="w-full px-8 pt-2 pb-1 border-t border-graphite-100 flex items-center justify-between flex-shrink-0 text-graphite-500 text-[9px] font-sans">
@@ -2002,10 +2090,18 @@ const App = () => {
       
       {/* Dynamic Print CSS Injection */}
       <style dangerouslySetInnerHTML={{__html: `
+        @page { size: A4 landscape; margin: 8mm; }
         @media print {
-            @page { size: landscape; margin: 8mm; }
             html, body { background-color: white !important; margin: 0; padding: 0; }
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+            .print-page {
+                width: 281mm;            /* A4 landscape (297mm) minus 2 x 8mm margins */
+                height: 194mm;           /* A4 landscape (210mm) minus 2 x 8mm margins */
+                overflow: hidden;
+                page-break-after: always;
+                page-break-inside: avoid;
+            }
+            .print-page:last-child { page-break-after: auto; }
         }
         .print-brand-stripe {
             height: 4px;
