@@ -695,6 +695,20 @@ const CONTINUATION_PAGE_CAP = 16; // continuation page: 4 cols x 4 rows full-wid
 // Smart column count for the subject-page side panes (0-12 only; above that we paginate).
 const sideColumns = (n) => (n <= 4 ? 1 : 2);
 
+// Direct-reports grid column count. With no matrix pane the DR side gets the
+// whole right half of the canvas, so widen toward ~4 rows (up to 3 cols) to
+// fill the space instead of overflowing vertically into an empty right margin.
+// With a matrix pane present the DR side is narrower, so cap at 2 cols.
+const drColumns = (n, hasMatrix) => {
+    if (hasMatrix) return n <= 4 ? 1 : 2;
+    if (n <= 2) return n || 1;   // 1-2 reports → 1-2 cols
+    if (n <= 8) return 2;        // 3-8 reports → 2 cols (≤4 rows)
+    return 3;                    // 9-12 reports → 3 cols (≤4 rows)
+};
+
+// Static class strings so Tailwind's scanner keeps these utilities in the build.
+const GRID_COLS = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' };
+
 // Pure function: split one subject's reports across a 'subject' page plus
 // 'continuation' pages. Returns a list of page descriptors:
 //   { kind, subject, drs, matrix, drStart, drTotal }
@@ -899,7 +913,7 @@ const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
                                     {hasDrs && (
                                         <div className={`${drWidthClass} pt-16 flex flex-col items-center`}>
                                             <div className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-graphite-500 mb-4 border-b border-graphite-200 pb-1 w-full text-center max-w-[160px]">DIRECT REPORTS</div>
-                                            <div className={`grid gap-3 justify-center ${sideColumns(pageDrs.length) === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                            <div className={`grid gap-3 justify-center ${GRID_COLS[drColumns(pageDrs.length, hasMatrix)]}`}>
                                                 {pageDrs.map(d => (
                                                     <div key={d._id} style={{ pageBreakInside: 'avoid' }}>
                                                         <PrintTile employee={d} />
