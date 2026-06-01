@@ -2020,8 +2020,58 @@ const App = () => {
   const manager = activeEmployee?._managerId ? employeeMap[activeEmployee._managerId] : null;
   const directReports = (activeEmployee?._directs || []).map(id => employeeMap[id]).filter(Boolean).filter(emp => filterConditions.length === 0 || baseFilteredData.find(f => f._id === emp._id)).sort((a, b) => sortEmployees(a, b, ceoId));
   const matrixReports = (activeEmployee?._matrix || []).map(id => employeeMap[id]).filter(Boolean).filter(emp => filterConditions.length === 0 || baseFilteredData.find(f => f._id === emp._id)).sort((a, b) => sortEmployees(a, b, ceoId));
-  const isMatrixView = viewMode === 'matrix';
-  const displayedReports = isMatrixView ? matrixReports : directReports;
+
+  // Renders one expanded reports section (Direct or Matrix) under the active
+  // employee. Self-hides when the employee has zero reports of that kind, so
+  // Direct and Matrix can be stacked and each only appears when present.
+  const renderReportsSection = (reports, mode) => {
+      const isMatrix = mode === 'matrix';
+      const totalUnfilteredReports = isMatrix ? (activeEmployee?._matrix || []).length : (activeEmployee?._directs || []).length;
+      if (totalUnfilteredReports === 0) return null;
+
+      const hasFilteredReports = filterConditions.length > 0 && totalUnfilteredReports > reports.length;
+      const isCompletelyFiltered = totalUnfilteredReports > 0 && reports.length === 0;
+
+      let pillClasses = `text-[10px] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full shadow-sm border flex items-center gap-2 `;
+      if (hasFilteredReports || isCompletelyFiltered) {
+          pillClasses += `bg-slate-100 text-slate-500 border-slate-200`;
+      } else {
+          pillClasses += isMatrix ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-white text-slate-600 border-slate-200';
+      }
+
+      return (
+          <div className="flex flex-col items-center animate-fade-in-up w-full mt-2">
+              <div className={`h-6 w-px ${isMatrix ? 'bg-purple-400' : 'bg-slate-300'}`}></div>
+
+              <div className="flex flex-col items-center gap-1.5 mb-6">
+                  <div className={pillClasses}>
+                     <span>{isMatrix ? 'Matrix Reports' : 'Direct Reports'} ({reports.length}{(hasFilteredReports || isCompletelyFiltered) ? ` / ${totalUnfilteredReports}` : ''})</span>
+
+                     {(hasFilteredReports || isCompletelyFiltered) && (
+                         <>
+                             <div className="w-px h-3 bg-slate-300"></div>
+                             <span className="text-slate-400 flex items-center gap-1"><Filter size={10}/> Filters Applied</span>
+                         </>
+                     )}
+                  </div>
+              </div>
+
+              {reports.length > 0 ? (
+                  <div className="flex justify-center flex-wrap gap-6 w-full px-4">
+                  {reports.map(emp => (
+                      <div key={emp._id} className="flex flex-col items-center relative w-full sm:w-auto">
+                      <EmployeeCard employee={emp} ceoId={ceoId} globalMetrics={dynamicGlobalMetrics} isMatrixNode={isMatrix} onClick={() => handleEmployeeSelect(emp._id)} onSelectDirect={() => { setActiveEmployeeId(emp._id); setViewMode('direct'); }} onSelectMatrix={() => { setActiveEmployeeId(emp._id); setViewMode('matrix'); }} onContextMenu={(e, emp) => { e.preventDefault(); setContextMenu({x: e.clientX, y: e.clientY, empId: emp._id}); }} />
+                      </div>
+                  ))}
+                  </div>
+              ) : (
+                  <div className="text-sm text-slate-400 italic bg-white px-6 py-4 rounded-xl border border-slate-200 shadow-sm mt-2">
+                      All {isMatrix ? 'matrix' : 'direct'} reports for this employee have been hidden by the current filters.
+                  </div>
+              )}
+          </div>
+      );
+  };
 
   // Reset table scroll if filtering changes
   useEffect(() => {
@@ -2478,55 +2528,10 @@ const App = () => {
                 </div>
                 )}
 
-                {/* TEAMS STYLE MULTI-LINE LAYOUT */}
-                {(() => {
-                    const totalUnfilteredReports = isMatrixView ? (activeEmployee?._matrix || []).length : (activeEmployee?._directs || []).length;
-                    const hasFilteredReports = filterConditions.length > 0 && totalUnfilteredReports > displayedReports.length;
-                    const isCompletelyFiltered = totalUnfilteredReports > 0 && displayedReports.length === 0;
-
-                    if (totalUnfilteredReports === 0) return null;
-
-                    let pillClasses = `text-[10px] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full shadow-sm border flex items-center gap-2 `;
-                    
-                    if (hasFilteredReports || isCompletelyFiltered) {
-                        pillClasses += `bg-slate-100 text-slate-500 border-slate-200`;
-                    } else {
-                        pillClasses += isMatrixView ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-white text-slate-600 border-slate-200';
-                    }
-
-                    return (
-                        <div className="flex flex-col items-center animate-fade-in-up w-full mt-2">
-                            <div className={`h-6 w-px ${isMatrixView ? 'bg-purple-400' : 'bg-slate-300'}`}></div>
-                            
-                            <div className="flex flex-col items-center gap-1.5 mb-6">
-                                <div className={pillClasses}>
-                                   <span>{isMatrixView ? 'Matrix Reports' : 'Direct Reports'} ({displayedReports.length}{(hasFilteredReports || isCompletelyFiltered) ? ` / ${totalUnfilteredReports}` : ''})</span>
-                                   
-                                   {(hasFilteredReports || isCompletelyFiltered) && (
-                                       <>
-                                           <div className="w-px h-3 bg-slate-300"></div>
-                                           <span className="text-slate-400 flex items-center gap-1"><Filter size={10}/> Filters Applied</span>
-                                       </>
-                                   )}
-                                </div>
-                            </div>
-                            
-                            {displayedReports.length > 0 ? (
-                                <div className="flex justify-center flex-wrap gap-6 w-full px-4">
-                                {displayedReports.map(emp => (
-                                    <div key={emp._id} className="flex flex-col items-center relative w-full sm:w-auto">
-                                    <EmployeeCard employee={emp} ceoId={ceoId} globalMetrics={dynamicGlobalMetrics} isMatrixNode={isMatrixView} onClick={() => handleEmployeeSelect(emp._id)} onSelectDirect={() => { setActiveEmployeeId(emp._id); setViewMode('direct'); }} onSelectMatrix={() => { setActiveEmployeeId(emp._id); setViewMode('matrix'); }} onContextMenu={(e, emp) => { e.preventDefault(); setContextMenu({x: e.clientX, y: e.clientY, empId: emp._id}); }} />
-                                    </div>
-                                ))}
-                                </div>
-                            ) : (
-                                <div className="text-sm text-slate-400 italic bg-white px-6 py-4 rounded-xl border border-slate-200 shadow-sm mt-2">
-                                    All {isMatrixView ? 'matrix' : 'direct'} reports for this employee have been hidden by the current filters.
-                                </div>
-                            )}
-                        </div>
-                    );
-                })()}
+                {/* TEAMS STYLE MULTI-LINE LAYOUT — Direct then Matrix, each
+                    only shown when the active employee has reports of that kind. */}
+                {renderReportsSection(directReports, 'direct')}
+                {renderReportsSection(matrixReports, 'matrix')}
             </div>
 
             {/* COMPARE VIEW */}
