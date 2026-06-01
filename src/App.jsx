@@ -7,11 +7,11 @@ import { Upload, Search, Info, Users, User, MapPin, Building2, Clock, CalendarDa
 const REQUIRED_COLUMNS = [
     "Employee's Position Code", 'Employee name', "Line Manager's Position Code",
     'Position Text', 'Level', 'Function 1', 'Function/Plant', 'Location Name',
-    'Asset', 'HR Manager EID',
+    'Asset',
 ];
 const RECOMMENDED_COLUMNS = [
     'Line Manager Name', 'Employee Class',
-    'Cluster', 'Gender', 'Date of Birth', 'HR Manager Name', 'Management Board EID'
+    'Cluster', 'Gender', 'Date of Birth', 'HR Manager EID', 'HR Manager Name', 'Management Board EID'
 ];
 const OPTIONAL_COLUMNS = [
     'Date of Joining', 'Date in Role', 'Date Promoted', 'Manager Since',
