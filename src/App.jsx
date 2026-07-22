@@ -750,16 +750,31 @@ const planSubjectPages = (subject, employeeMap, ceoId) => {
     return pages;
 };
 
+// How many subject levels below the print root get their own pages. Each
+// page shows its subject plus one level below, so the printed tree reaches
+// root (n) → n-1 → n-2 → n-3 with a depth of 2.
+const PRINT_SUBJECT_DEPTH = 2;
+
+// Depth-first subject collection: a manager's page is immediately followed by
+// the pages of their own reporting managers, so the PDF reads top-down one
+// sub-tree at a time. Only people who actually have reports become subjects.
+const collectPrintSubjects = (emp, depth, employeeMap, ceoId) => {
+    const subjects = [emp];
+    if (depth <= 0) return subjects;
+    const drs = (emp._directs || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
+    drs.forEach(dr => {
+        if ((dr._insights?.directCount || 0) > 0 || (dr._insights?.matrixCount || 0) > 0) {
+            subjects.push(...collectPrintSubjects(dr, depth - 1, employeeMap, ceoId));
+        }
+    });
+    return subjects;
+};
+
 const PrintLayout = ({ rootId, employeeMap, ceoId }) => {
     const rootEmp = employeeMap[rootId];
     if (!rootEmp) return null;
 
-    const rootDrs = (rootEmp._directs || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
-
-    const subjectsToPrint = [
-        rootEmp,
-        ...rootDrs.filter(dr => (dr._insights?.directCount || 0) > 0 || (dr._insights?.matrixCount || 0) > 0),
-    ];
+    const subjectsToPrint = collectPrintSubjects(rootEmp, PRINT_SUBJECT_DEPTH, employeeMap, ceoId);
     const pages = subjectsToPrint.flatMap(s => planSubjectPages(s, employeeMap, ceoId));
 
     const printedAt = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
