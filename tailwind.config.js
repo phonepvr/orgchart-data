@@ -4,6 +4,15 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // Classes built dynamically at runtime (hover:ring-${color}-400 in the
+  // compare context menu) — invisible to the content scan, listed explicitly.
+  safelist: [
+    'hover:ring-blue-400',
+    'hover:ring-green-400',
+    'hover:ring-red-400',
+    'hover:ring-orange-400',
+    'hover:ring-purple-400',
+  ],
   theme: {
     extend: {
       colors: {

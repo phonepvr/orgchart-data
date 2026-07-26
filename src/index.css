@@ -43,3 +43,22 @@
   to { opacity: 1; transform: scale(1); }
 }
 
+/* 4. Print layout (previously injected at runtime by App.jsx) */
+@page { size: A4 landscape; margin: 8mm; }
+@media print {
+  html, body { background-color: white !important; margin: 0; padding: 0; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+  .print-page {
+    width: 281mm;            /* A4 landscape (297mm) minus 2 x 8mm margins */
+    height: 194mm;           /* A4 landscape (210mm) minus 2 x 8mm margins */
+    overflow: hidden;
+    page-break-after: always;
+    page-break-inside: avoid;
+  }
+  .print-page:last-child { page-break-after: auto; }
+}
+.print-brand-stripe {
+  height: 4px;
+  background: linear-gradient(90deg, #E52726 0%, #E52726 62%, transparent 62%, transparent 66%, #000000 66%, #000000 100%);
+}
+
