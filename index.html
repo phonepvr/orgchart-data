@@ -4,15 +4,23 @@
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https: data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; form-action 'none'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'" />
     <meta name="referrer" content="no-referrer" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AM/NS Org Sense</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./css/app.css" />
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <!-- Body-level overlay layers (the former React portals render here) -->
+    <div id="info-tooltip-layer"></div>
+    <div id="grade-tooltip-layer"></div>
+    <div id="context-menu-layer"></div>
+    <!-- Order matters: prototype freeze must run before the XLSX vendor script -->
+    <script src="./js/harden.js"></script>
+    <script src="./vendor/xlsx.full.min.js"></script>
+    <script type="module" src="./js/main.js"></script>
   </body>
 </html>
