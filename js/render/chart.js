@@ -1,10 +1,8 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { esc, STATUS_STYLES, NAME_STATUS_TINT, formatNum, icon, avatarHTML, statusChipHTML, nameStatusChipHTML, state, derived } = OS;
 // Org chart view: employee cards, manager/active/reports layout.
-import { esc } from '../util.js';
-import { STATUS_STYLES, NAME_STATUS_TINT } from '../constants.js';
-import { formatNum } from '../data.js';
-import { icon } from '../icons.js';
-import { avatarHTML, statusChipHTML, nameStatusChipHTML } from './bits.js';
-import { state, derived } from '../state.js';
 
 // One employee card. Interactions are wired via data attributes handled by
 // the delegated listeners in main.js:
@@ -12,7 +10,7 @@ import { state, derived } from '../state.js';
 //   data-action="select-direct"/"select-matrix" — expand reports of that kind
 //   data-tip="info"/"grade"      — hover tooltips (overlays.js)
 //   data-ctx                     — right-click context menu
-export const employeeCardHTML = (employee, { isActive = false, isMatrixNode = false, viewMode = 'direct' } = {}) => {
+const employeeCardHTML = (employee, { isActive = false, isMatrixNode = false, viewMode = 'direct' } = {}) => {
     const insights = employee._insights || { genderCount: { male: 0, female: 0, other: 0 } };
     const isIndividualContributor = insights.directCount === 0 && (insights.eaCount || 0) === 0 && insights.matrixCount === 0;
 
@@ -136,7 +134,7 @@ const reportsSectionHTML = (reports, mode) => {
 };
 
 // The org-chart tab content (manager → active card → reports sections).
-export const orgViewHTML = () => {
+const orgViewHTML = () => {
     const { manager, activeEmployee, directReports, matrixReports } = derived;
     return `<div id="org-scroll" class="w-full mx-auto flex-col items-center pb-32 p-4 sm:p-8 overflow-y-auto ${state.appTab === 'org' ? 'flex' : 'hidden'}">` +
         (manager
@@ -152,3 +150,6 @@ export const orgViewHTML = () => {
         reportsSectionHTML(matrixReports, 'matrix') +
         `</div>`;
 };
+
+Object.assign(OS, { employeeCardHTML, orgViewHTML });
+})();

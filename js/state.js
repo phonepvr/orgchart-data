@@ -1,18 +1,15 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { sortEmployees, computeAllUniqueByField, computeAvailableFilterFields, searchEmployees, applyFilters, sortTabular, computeCohortMetrics, computeDynamicGlobalMetrics, computeHeatmapStats, NUMERIC_FIELDS } = OS;
 // Central application state + derived data + region render dispatch.
 //
 // Pattern: renderers mutate nothing; actions (main.js) mutate `state` then
 // call render(...regions). Each region renderer rebuilds its container's
 // HTML from state. At ≤ a few thousand rows a full region rebuild is
 // single-digit milliseconds, so there is no fine-grained DOM diffing.
-import { sortEmployees } from './data.js';
-import {
-    computeAllUniqueByField, computeAvailableFilterFields, searchEmployees,
-    applyFilters, sortTabular, computeCohortMetrics, computeDynamicGlobalMetrics,
-    computeHeatmapStats,
-} from './filters.js';
-import { NUMERIC_FIELDS } from './constants.js';
 
-export const state = {
+const state = {
     unlocked: false,
     appTab: 'org', // 'org', 'table', 'compare'
     data: [],
@@ -50,9 +47,9 @@ export const state = {
 
 // Derived data, recomputed once per render pass. Kept in a module-level
 // object so overlay code (tooltips) can read the latest values between renders.
-export const derived = {};
+const derived = {};
 
-export function refreshDerived() {
+function refreshDerived() {
     const allUniqueByField = computeAllUniqueByField(state.data);
     const availableFilterFields = computeAvailableFilterFields(allUniqueByField);
     const baseFilteredData = applyFilters(state.data, state.filterConditions, state.filterMatchMode);
@@ -80,14 +77,17 @@ export function refreshDerived() {
 }
 
 // Region renderers are registered by main.js (avoids circular imports).
-export const renderers = {};
+const renderers = {};
 
 // render('header', 'content', ...) or render('app') for all app regions.
 // Valid regions: screen, header, banner, sidebar, content, overlays, print
 const APP_REGIONS = ['header', 'banner', 'sidebar', 'content', 'overlays'];
 
-export function render(...regions) {
+function render(...regions) {
     refreshDerived();
     const list = regions.includes('app') ? APP_REGIONS.concat(regions.filter(r => r !== 'app')) : regions;
     [...new Set(list)].forEach(r => { if (renderers[r]) renderers[r](); });
 }
+
+Object.assign(OS, { state, derived, refreshDerived, renderers, render });
+})();

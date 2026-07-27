@@ -13,14 +13,39 @@
     <link rel="stylesheet" href="./css/app.css" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Replaced by the app on boot; if it stays visible, JavaScript failed
+           to load/run and js/diag.js fills in the reasons it captured. -->
+      <div id="boot-fallback" style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 1.5rem; border: 1px solid #D6DAE2; border-radius: 4px; color: #2E3647; background: #fff;">
+        <h1 style="font-size: 1.1rem; margin: 0 0 0.5rem;">AM/NS Org Sense</h1>
+        <p style="margin: 0 0 0.75rem;">Loading&hellip; If this message does not disappear, the app's JavaScript failed to load or run on this server.</p>
+        <ul id="boot-problems" style="margin: 0; padding-left: 1.25rem; color: #A11816; font-size: 0.85rem;"></ul>
+        <p style="margin: 0.75rem 0 0; font-size: 0.85rem; color: #5F6B80;">Make sure the site is opened over http(s) from a web server (not a file share), and that the css/, js/, js/render/ and vendor/ folders were uploaded next to index.html. See the Hosting section of the README.</p>
+      </div>
+    </div>
     <!-- Body-level overlay layers (the former React portals render here) -->
     <div id="info-tooltip-layer"></div>
     <div id="grade-tooltip-layer"></div>
     <div id="context-menu-layer"></div>
-    <!-- Order matters: prototype freeze must run before the XLSX vendor script -->
+    <!-- Classic scripts, dependency order. harden.js must run before the XLSX
+         vendor script; main.js boots the app and must come last. -->
     <script src="./js/harden.js"></script>
+    <script src="./js/diag.js"></script>
     <script src="./vendor/xlsx.full.min.js"></script>
-    <script type="module" src="./js/main.js"></script>
+    <script src="./js/util.js"></script>
+    <script src="./js/constants.js"></script>
+    <script src="./js/icons.js"></script>
+    <script src="./js/data.js"></script>
+    <script src="./js/filters.js"></script>
+    <script src="./js/state.js"></script>
+    <script src="./js/render/bits.js"></script>
+    <script src="./js/render/spotlight.js"></script>
+    <script src="./js/render/chart.js"></script>
+    <script src="./js/render/table.js"></script>
+    <script src="./js/render/compare.js"></script>
+    <script src="./js/render/print.js"></script>
+    <script src="./js/render/overlays.js"></script>
+    <script src="./js/render/shell.js"></script>
+    <script src="./js/main.js"></script>
   </body>
 </html>

@@ -1,25 +1,11 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { state, renderers, render, refreshDerived, sha256Hex, validateHeaders, processEmployeeData, defaultsForField, ACCESS_HASH, lockScreenHTML, uploadScreenHTML, headerInnerHTML, searchResultsHTML, bannerHTML, sidebarClass, sidebarInnerHTML, pillsBarHTML, orgViewHTML, tableViewHTML, compareViewHTML, printLayoutHTML, showInfoTooltip, scheduleHideInfoTooltip, cancelHideInfoTooltip, showGradeTooltip, scheduleHideGradeTooltip, cancelHideGradeTooltip, clearTooltips, renderContextMenu, avatarErrorFallback } = OS;
 // Boot + event wiring. All interactions are delegated document-level
 // listeners resolving data-action / data-input / data-change attributes, so
 // region re-renders never need listener bookkeeping.
 /* global XLSX */
-import { state, renderers, render, refreshDerived } from './state.js';
-import { sha256Hex, validateHeaders, processEmployeeData } from './data.js';
-import { defaultsForField } from './filters.js';
-import { ACCESS_HASH } from './constants.js';
-import {
-    lockScreenHTML, uploadScreenHTML, headerInnerHTML, searchResultsHTML,
-    bannerHTML, sidebarClass, sidebarInnerHTML, pillsBarHTML,
-} from './render/shell.js';
-import { orgViewHTML } from './render/chart.js';
-import { tableViewHTML } from './render/table.js';
-import { compareViewHTML } from './render/compare.js';
-import { printLayoutHTML } from './render/print.js';
-import {
-    showInfoTooltip, scheduleHideInfoTooltip, cancelHideInfoTooltip,
-    showGradeTooltip, scheduleHideGradeTooltip, cancelHideGradeTooltip,
-    clearTooltips, renderContextMenu,
-} from './render/overlays.js';
-import { avatarErrorFallback } from './render/bits.js';
 
 const root = document.getElementById('root');
 let currentScreen = null; // 'lock' | 'upload' | 'app'
@@ -552,3 +538,8 @@ function wireLockScreen() {
 // --- Boot ---
 wireGlobalListeners();
 renderScreen();
+// Signals js/diag.js that startup succeeded (renderScreen just replaced the
+// static boot-fallback markup inside #root).
+window.__orgSenseBooted = true;
+
+})();

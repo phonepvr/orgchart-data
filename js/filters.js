@@ -1,10 +1,12 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { FILTER_FIELD_MAP, MULTI_SELECT_FIELDS, NUMERIC_FIELDS, getMedian, getCohortStats, isEA } = OS;
 // Filtering, sorting, and cohort/benchmark metric computation.
 // Pure functions over the employee data array — ported verbatim from the
 // former React useMemo bodies.
-import { FILTER_FIELD_MAP, MULTI_SELECT_FIELDS, NUMERIC_FIELDS } from './constants.js';
-import { getMedian, getCohortStats, isEA } from './data.js';
 
-export const computeAllUniqueByField = (data) => {
+const computeAllUniqueByField = (data) => {
     const out = {};
     Object.entries(FILTER_FIELD_MAP).forEach(([label, key]) => {
         out[label] = [...new Set(data.map(emp => emp[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -16,10 +18,10 @@ export const computeAllUniqueByField = (data) => {
     return out;
 };
 
-export const computeAvailableFilterFields = (allUniqueByField) =>
+const computeAvailableFilterFields = (allUniqueByField) =>
     MULTI_SELECT_FIELDS.filter(f => (allUniqueByField[f] || []).length > 0);
 
-export const searchEmployees = (data, searchQuery) => {
+const searchEmployees = (data, searchQuery) => {
     if (!searchQuery) return [];
     const query = searchQuery.toLowerCase();
     // Using precomputed formatted names handles queries faster
@@ -27,7 +29,7 @@ export const searchEmployees = (data, searchQuery) => {
 };
 
 // Decoupled filtering logic
-export const applyFilters = (data, filterConditions, filterMatchMode) => {
+const applyFilters = (data, filterConditions, filterMatchMode) => {
     if (filterConditions.length === 0) return data;
     return data.filter(emp => {
         const results = filterConditions.map(cond => {
@@ -62,7 +64,7 @@ export const applyFilters = (data, filterConditions, filterMatchMode) => {
 };
 
 // Tabular specific sorted view
-export const sortTabular = (baseFilteredData, sortConfigs) => {
+const sortTabular = (baseFilteredData, sortConfigs) => {
     let filtered = [...baseFilteredData];
     if (sortConfigs.length > 0) {
         filtered.sort((a, b) => {
@@ -91,7 +93,7 @@ export const sortTabular = (baseFilteredData, sortConfigs) => {
     return filtered;
 };
 
-export const computeCohortMetrics = (baseFilteredData, ceoId) => {
+const computeCohortMetrics = (baseFilteredData, ceoId) => {
     const mc = baseFilteredData.filter(e => e._isMgmtCommittee && e._id !== ceoId);
     const tagBuckets = {};
     baseFilteredData.forEach(emp => {
@@ -108,7 +110,7 @@ export const computeCohortMetrics = (baseFilteredData, ceoId) => {
     return out;
 };
 
-export const computeDynamicGlobalMetrics = (baseFilteredData, cohortMetrics) => {
+const computeDynamicGlobalMetrics = (baseFilteredData, cohortMetrics) => {
     const buckets = {};
     baseFilteredData.forEach(emp => {
         if (isEA(emp)) return;
@@ -131,7 +133,7 @@ export const computeDynamicGlobalMetrics = (baseFilteredData, cohortMetrics) => 
     };
 };
 
-export const computeHeatmapStats = (baseFilteredData) => {
+const computeHeatmapStats = (baseFilteredData) => {
     const buckets = {};
     baseFilteredData.forEach(emp => {
         if (emp._insights?.directCount > 0) {
@@ -147,7 +149,10 @@ export const computeHeatmapStats = (baseFilteredData) => {
         .slice(0, 10);
 };
 
-export const defaultsForField = (field) => {
+const defaultsForField = (field) => {
     if (NUMERIC_FIELDS.includes(field)) return { operator: '=', value: '' };
     return { operator: 'in', value: [] };
 };
+
+Object.assign(OS, { computeAllUniqueByField, computeAvailableFilterFields, searchEmployees, applyFilters, sortTabular, computeCohortMetrics, computeDynamicGlobalMetrics, computeHeatmapStats, defaultsForField });
+})();

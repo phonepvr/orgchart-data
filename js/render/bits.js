@@ -1,10 +1,10 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { esc, STATUS_STYLES, NAME_STATUS_TINT, buildInitials, icon } = OS;
 // Small shared HTML builders: chips, avatar, brand marks, grade lists.
-import { esc } from '../util.js';
-import { STATUS_STYLES, NAME_STATUS_TINT } from '../constants.js';
-import { buildInitials } from '../data.js';
-import { icon } from '../icons.js';
 
-export const statusChipHTML = (status, size = 'sm') => {
+const statusChipHTML = (status, size = 'sm') => {
     if (!status) return '';
     const sty = STATUS_STYLES[status];
     const cls = sty ? sty.chip : 'bg-graphite-100 text-graphite-700 border-graphite-200';
@@ -13,7 +13,7 @@ export const statusChipHTML = (status, size = 'sm') => {
         `<span class="w-1.5 h-1.5 rounded-full" style="background-color: ${sty ? sty.rule : '#5F6B80'}"></span>${esc(status)}</span>`;
 };
 
-export const nameStatusChipHTML = (nameStatus) => {
+const nameStatusChipHTML = (nameStatus) => {
     if (!nameStatus) return '';
     const tint = NAME_STATUS_TINT[nameStatus];
     return `<span class="inline-flex items-center text-[9px] font-sans font-bold uppercase tracking-wider rounded-brand border px-1.5 py-0.5 ${nameStatus === 'approved' ? 'bg-graphite-100 text-graphite-700 border-graphite-300' : 'bg-signal/10 text-signal border-signal/40'}">${tint.label}</span>`;
@@ -21,7 +21,7 @@ export const nameStatusChipHTML = (nameStatus) => {
 
 // Avatar with photo + initials fallback. On image load error a captured
 // `error` listener (main.js) swaps the content for the fallback below.
-export const avatarHTML = (employee, size = 48, { ringClass = '', textClass = 'text-white', bgClass = 'bg-graphite-700' } = {}) => {
+const avatarHTML = (employee, size = 48, { ringClass = '', textClass = 'text-white', bgClass = 'bg-graphite-700' } = {}) => {
     const initials = employee._initials || buildInitials(employee.name);
     const showImg = !!employee.photoUrl;
     const isPlaceholder = !showImg && !!employee._nameStatus;
@@ -43,7 +43,7 @@ export const avatarHTML = (employee, size = 48, { ringClass = '', textClass = 't
 
 // The fallback applied when an avatar photo fails to load (mirrors the React
 // onError -> errored state path).
-export const avatarErrorFallback = (container, employeeMap) => {
+const avatarErrorFallback = (container, employeeMap) => {
     const emp = employeeMap[container.dataset.id];
     const size = Number(container.dataset.size) || 48;
     const nameStatus = emp ? emp._nameStatus : null;
@@ -59,7 +59,7 @@ export const avatarErrorFallback = (container, employeeMap) => {
 };
 
 // Sorted grade rows for tooltips (was renderGradesList).
-export const gradesListHTML = (gradesObj) => {
+const gradesListHTML = (gradesObj) => {
     if (!gradesObj) return '<div class="p-2 text-slate-500 italic">No data</div>';
     const entries = Object.entries(gradesObj);
     if (entries.length === 0) return '<div class="p-2 text-slate-500 italic">No data</div>';
@@ -83,7 +83,7 @@ const AMNS_VARIANTS = {
     reverse:          { ink: 'text-white',         sep: 'text-red-500',     sub: 'text-graphite-300' },
 };
 
-export const amnsMarkHTML = (size = 'md', variant = 'light') => {
+const amnsMarkHTML = (size = 'md', variant = 'light') => {
     const sizes = {
         sm: { mark: 'text-xl', sub: 'text-[8px]', gap: 'mt-0' },
         md: { mark: 'text-3xl', sub: 'text-[9px]', gap: 'mt-1' },
@@ -101,9 +101,12 @@ export const amnsMarkHTML = (size = 'md', variant = 'light') => {
 // Section 06 of the brand sheet — forward-diagonal accent. Smart Red by
 // default; pure white / strong black are the only other permitted fills.
 // Never reverse or break the angle.
-export const brandStrokeHTML = (className = '', tone = 'red') => {
+const brandStrokeHTML = (className = '', tone = 'red') => {
     const fill = tone === 'white' ? '#FFFFFF' : tone === 'black' ? '#000000' : '#E52726';
     return `<svg viewBox="0 0 120 40" preserveAspectRatio="none" class="${className}" aria-hidden="true">` +
         `<polygon fill="${fill}" points="20,0 50,0 30,40 0,40"/>` +
         `<polygon fill="${fill}" points="80,0 110,0 90,40 60,40"/></svg>`;
 };
+
+Object.assign(OS, { statusChipHTML, nameStatusChipHTML, avatarHTML, avatarErrorFallback, gradesListHTML, amnsMarkHTML, brandStrokeHTML });
+})();

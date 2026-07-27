@@ -1,14 +1,14 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { REQUIRED_COLUMNS, RECOMMENDED_COLUMNS, OPTIONAL_COLUMNS, NORMAL_PAGE_CAP, CONTINUATION_PAGE_CAP } = OS;
 // Pure data logic: parsing, normalization, insights, print pagination.
 // Ported verbatim from the former React App.jsx — no DOM access here.
-import {
-    REQUIRED_COLUMNS, RECOMMENDED_COLUMNS, OPTIONAL_COLUMNS,
-    NORMAL_PAGE_CAP, CONTINUATION_PAGE_CAP,
-} from './constants.js';
 
 // --- Format Helpers ---
-export const formatNum = (num) => (num === 0 || num === '0' || !num) ? '-' : num;
+const formatNum = (num) => (num === 0 || num === '0' || !num) ? '-' : num;
 
-export const formatJobTitle = (title) => {
+const formatJobTitle = (title) => {
     if (!title) return '';
     let t = String(title)
         .replace(/Ã¢Â€Â[”“-]/g, '-')
@@ -30,16 +30,16 @@ export const formatJobTitle = (title) => {
         .trim();
 };
 
-export const splitSemicolonList = (v) => {
+const splitSemicolonList = (v) => {
     if (v === undefined || v === null || v === '') return [];
     return String(v).split(';').map(s => s.trim()).filter(Boolean);
 };
 
-export const buildInitials = (name) => {
+const buildInitials = (name) => {
     return String(name || '?').split(/\s+/).filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase();
 };
 
-export const deriveAge = (dob) => {
+const deriveAge = (dob) => {
     if (!dob || !(dob instanceof Date) || isNaN(dob.getTime())) return null;
     const today = new Date();
     let age = today.getFullYear() - dob.getFullYear();
@@ -48,7 +48,7 @@ export const deriveAge = (dob) => {
     return age >= 0 && age < 120 ? age : null;
 };
 
-export const sortEmployees = (a, b, ceoId) => {
+const sortEmployees = (a, b, ceoId) => {
     if (a._id === ceoId) return -1;
     if (b._id === ceoId) return 1;
     const mcA = a._isMgmtCommittee ? 1 : 0;
@@ -60,16 +60,16 @@ export const sortEmployees = (a, b, ceoId) => {
     return (a._formattedName || '').localeCompare(b._formattedName || '');
 };
 
-export const getMedian = (arr) => {
+const getMedian = (arr) => {
     if (!arr || arr.length === 0) return 0;
     const s = [...arr].sort((a,b) => a - b);
     const mid = Math.floor(s.length / 2);
     return s.length % 2 !== 0 ? s[mid] : s[mid - 1];
 };
 
-export const toProperCase = (str) => str ? str.replace(/\b\w+/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()) : '';
+const toProperCase = (str) => str ? str.replace(/\b\w+/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()) : '';
 
-export const formatDisplayFirstLast = (name) => {
+const formatDisplayFirstLast = (name) => {
     if (!name) return '';
     let cleanName = String(name).replace(/\./g, '').trim();
     const parts = cleanName.split(/\s+/);
@@ -92,7 +92,7 @@ export const formatDisplayFirstLast = (name) => {
     return toProperCase(display);
 };
 
-export const parseExcelDate = (excelDate) => {
+const parseExcelDate = (excelDate) => {
     if (excelDate === undefined || excelDate === null || excelDate === '') return null;
     if (typeof excelDate === 'number') return new Date(Math.round((excelDate - 25569) * 86400 * 1000));
 
@@ -117,7 +117,7 @@ export const parseExcelDate = (excelDate) => {
     return isNaN(fallbackDate.getTime()) ? null : fallbackDate;
 };
 
-export const formatDuration = (start, end) => {
+const formatDuration = (start, end) => {
     if (!start) return '-';
     let s = start;
     if (s instanceof Date && s.getFullYear() >= 9999) s = new Date();
@@ -130,14 +130,14 @@ export const formatDuration = (start, end) => {
     return (months / 12).toFixed(1) + ' yrs';
 };
 
-export const isEA = (e) => {
+const isEA = (e) => {
     if (!e) return false;
     const title = String(e.jobTitle || '').toLowerCase();
     return title.includes('executive assistant') || title.includes('executive secretary') || title.includes('confidential secretary');
 };
 
 // --- Template Header Validation ---
-export const validateHeaders = (rawRows) => {
+const validateHeaders = (rawRows) => {
     if (!rawRows || rawRows.length === 0) {
         return { ok: false, missingRequired: [...REQUIRED_COLUMNS], missingRecommended: [], missingOptional: [] };
     }
@@ -161,19 +161,19 @@ export const validateHeaders = (rawRows) => {
 const NAME_STATUS_VALUES = new Set(['approved', 'unapproved']);
 const VALID_STATUSES = new Set(['Active', 'WIP', 'Offered', 'Vacant']);
 
-export const deriveNameStatus = (name) => {
+const deriveNameStatus = (name) => {
     const k = String(name || '').trim().toLowerCase();
     return NAME_STATUS_VALUES.has(k) ? k : null;
 };
 
-export const normalizeCurrentStatus = (raw) => {
+const normalizeCurrentStatus = (raw) => {
     const v = String(raw || '').trim();
     if (!v) return '';
     const match = [...VALID_STATUSES].find(s => s.toLowerCase() === v.toLowerCase());
     return match || v; // pass through unrecognized values; UI shows neutral chip
 };
 
-export const normalizeRow = (row) => {
+const normalizeRow = (row) => {
     const get = (key) => {
         const val = row[key];
         if (val === undefined || val === null) return '';
@@ -211,7 +211,7 @@ export const normalizeRow = (row) => {
     };
 };
 
-export const sha256Hex = async (text) => {
+const sha256Hex = async (text) => {
     const buf = new TextEncoder().encode(text);
     const hashBuf = await crypto.subtle.digest('SHA-256', buf);
     return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -219,7 +219,7 @@ export const sha256Hex = async (text) => {
 
 // --- Employee graph construction + insights ---
 // Returns { data, employeeMap, ceoId } instead of setting React state.
-export const processEmployeeData = (rawData) => {
+const processEmployeeData = (rawData) => {
     const empMap = {};
     const directReportsMap = {};
     const matrixReportsMap = {};
@@ -354,7 +354,7 @@ export const processEmployeeData = (rawData) => {
     return { data: baseDataArr, employeeMap: empMap, ceoId: computedCeoId };
 };
 
-export const getCohortStats = (arr) => {
+const getCohortStats = (arr) => {
     if (arr.length === 0) return { count: 0 };
     const drs = arr.map(a => a._insights?.directCount || 0);
     const matrix = arr.map(a => a._insights?.matrixCount || 0);
@@ -377,13 +377,13 @@ export const getCohortStats = (arr) => {
 // --- Print pagination (pure data) ---
 
 // Smart column count for the subject-page side panes (0-12 only; above that we paginate).
-export const sideColumns = (n) => (n <= 4 ? 1 : 2);
+const sideColumns = (n) => (n <= 4 ? 1 : 2);
 
 // Direct-reports grid column count. With no matrix pane the DR side gets the
 // whole right half of the canvas, so widen toward ~4 rows (up to 3 cols) to
 // fill the space instead of overflowing vertically into an empty right margin.
 // With a matrix pane present the DR side is narrower, so cap at 2 cols.
-export const drColumns = (n, hasMatrix) => {
+const drColumns = (n, hasMatrix) => {
     if (hasMatrix) return n <= 4 ? 1 : 2;
     if (n <= 2) return n || 1;   // 1-2 reports → 1-2 cols
     if (n <= 8) return 2;        // 3-8 reports → 2 cols (≤4 rows)
@@ -393,7 +393,7 @@ export const drColumns = (n, hasMatrix) => {
 // Pure function: split one subject's reports across a 'subject' page plus
 // 'continuation' pages. Returns a list of page descriptors:
 //   { kind, subject, drs, matrix, drStart, drTotal }
-export const planSubjectPages = (subject, employeeMap, ceoId) => {
+const planSubjectPages = (subject, employeeMap, ceoId) => {
     const drs = (subject._directs || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
     const matrix = (subject._matrix || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
 
@@ -434,7 +434,7 @@ export const planSubjectPages = (subject, employeeMap, ceoId) => {
 // Depth-first subject collection: a manager's page is immediately followed by
 // the pages of their own reporting managers, so the PDF reads top-down one
 // sub-tree at a time. Only people who actually have reports become subjects.
-export const collectPrintSubjects = (emp, depth, employeeMap, ceoId) => {
+const collectPrintSubjects = (emp, depth, employeeMap, ceoId) => {
     const subjects = [emp];
     if (depth <= 0) return subjects;
     const drs = (emp._directs || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
@@ -445,3 +445,6 @@ export const collectPrintSubjects = (emp, depth, employeeMap, ceoId) => {
     });
     return subjects;
 };
+
+Object.assign(OS, { formatNum, formatJobTitle, splitSemicolonList, buildInitials, deriveAge, sortEmployees, getMedian, toProperCase, formatDisplayFirstLast, parseExcelDate, formatDuration, isEA, validateHeaders, deriveNameStatus, normalizeCurrentStatus, normalizeRow, sha256Hex, processEmployeeData, getCohortStats, sideColumns, drColumns, planSubjectPages, collectPrintSubjects });
+})();

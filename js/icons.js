@@ -1,3 +1,6 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
 // Inline SVG icon map — extracted from lucide-react 0.577.0 icon
 // definitions so the vanilla app renders byte-identical icons. Regenerate with
 // scripts note in the repo README if icons are ever added.
@@ -30,10 +33,13 @@ const ICON_PATHS = {
 
 // Render an icon as an SVG string. Mirrors lucide-react's defaults:
 // 24x24 viewBox, currentColor stroke, width/height = size.
-export const icon = (name, { size = 24, cls = '', strokeWidth = 2, title = '' } = {}) => {
+const icon = (name, { size = 24, cls = '', strokeWidth = 2, title = '' } = {}) => {
   const inner = ICON_PATHS[name];
   if (!inner) return '';
   const classAttr = cls ? ` class="${cls}"` : '';
   const titleAttr = title ? `<title>${title}</title>` : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"${classAttr} aria-hidden="true">${titleAttr}${inner}</svg>`;
 };
+
+Object.assign(OS, { icon });
+})();

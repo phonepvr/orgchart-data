@@ -1,7 +1,8 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { esc, STATUS_STYLES, NAME_STATUS_TINT, GRID_COLS, PRINT_SUBJECT_DEPTH, sideColumns, drColumns, planSubjectPages, collectPrintSubjects } = OS;
 // Print layout: A4-landscape position maps (subject + continuation pages).
-import { esc } from '../util.js';
-import { STATUS_STYLES, NAME_STATUS_TINT, GRID_COLS, PRINT_SUBJECT_DEPTH } from '../constants.js';
-import { sideColumns, drColumns, planSubjectPages, collectPrintSubjects } from '../data.js';
 
 const printTileHTML = (employee, { isMatrix = false, isLineManager = false } = {}) => {
     const matrixCount = employee._insights?.matrixCount || 0;
@@ -70,7 +71,7 @@ const printLegendHTML = () =>
     `<span class="uppercase tracking-wider font-semibold">MC</span></span>` +
     `</div>`;
 
-export const printLayoutHTML = (rootId, employeeMap, ceoId) => {
+const printLayoutHTML = (rootId, employeeMap, ceoId) => {
     const rootEmp = employeeMap[rootId];
     if (!rootEmp) return '';
 
@@ -201,3 +202,6 @@ export const printLayoutHTML = (rootId, employeeMap, ceoId) => {
 
     return `<div class="w-full bg-white print:bg-white text-graphite-900 p-0 m-0 font-sans">${pagesHTML}</div>`;
 };
+
+Object.assign(OS, { printLayoutHTML });
+})();

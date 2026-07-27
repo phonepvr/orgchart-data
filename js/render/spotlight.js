@@ -1,12 +1,11 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { esc, STATUS_STYLES, formatNum, icon, statusChipHTML, gradesListHTML } = OS;
 // Spotlight (info tooltip) + benchmark scales. Shared by the hover tooltip
 // (overlays) and the sidebar cohort scales.
-import { esc } from '../util.js';
-import { STATUS_STYLES } from '../constants.js';
-import { formatNum } from '../data.js';
-import { icon } from '../icons.js';
-import { statusChipHTML, gradesListHTML } from './bits.js';
 
-export const metricScaleHTML = ({ label, min, max, median, value, hideCurrent = false }) => {
+const metricScaleHTML = ({ label, min, max, median, value, hideCurrent = false }) => {
     const safeMax = hideCurrent ? max : Math.max(max, value, 1);
     const safeMin = hideCurrent ? min : Math.min(min, value);
     const range = safeMax - safeMin;
@@ -55,7 +54,7 @@ export const metricScaleHTML = ({ label, min, max, median, value, hideCurrent = 
         `</div></div>`;
 };
 
-export const benchmarkBoxHTML = ({ title, rightElement = '', borderColor = 'border-slate-200', titleColor = 'text-slate-500', bgClass = '' }, children) =>
+const benchmarkBoxHTML = ({ title, rightElement = '', borderColor = 'border-slate-200', titleColor = 'text-slate-500', bgClass = '' }, children) =>
     `<div class="relative border ${borderColor} rounded-xl p-4 pt-5 mb-6 mt-4 ${bgClass}">` +
     `<div class="absolute -top-2.5 left-3 bg-white px-2 text-xs font-bold ${titleColor} uppercase tracking-wider">${esc(title)}</div>` +
     (rightElement ? `<div class="absolute -top-3 right-3 bg-white px-1">${rightElement}</div>` : '') +
@@ -66,7 +65,7 @@ const tenureHTML = (employee) => employee._tenureFormatted
     : `<span class="text-slate-400">-</span>`;
 
 // The full Spotlight tooltip body (was the showTooltip portal in EmployeeCard).
-export const spotlightTooltipHTML = (employee, ceoId, globalMetrics) => {
+const spotlightTooltipHTML = (employee, ceoId, globalMetrics) => {
     const insights = employee._insights || { genderCount: { male: 0, female: 0, other: 0 } };
     const isIndividualContributor = insights.directCount === 0 && (insights.eaCount || 0) === 0 && insights.matrixCount === 0;
     const totalGender = insights.genderCount.male + insights.genderCount.female + insights.genderCount.other;
@@ -175,7 +174,7 @@ export const spotlightTooltipHTML = (employee, ceoId, globalMetrics) => {
 };
 
 // Grade tooltip body (was the gradeTooltip portal in EmployeeCard).
-export const gradeTooltipHTML = (employee, type) => {
+const gradeTooltipHTML = (employee, type) => {
     const insights = employee._insights || {};
     let popupHeaderClass = "px-3 py-2 border-b text-xs font-bold uppercase tracking-wider flex justify-between ";
     if (type === 'direct') popupHeaderClass += "bg-blue-100 text-blue-800 border-blue-200";
@@ -186,3 +185,6 @@ export const gradeTooltipHTML = (employee, type) => {
     return `<div class="${popupHeaderClass}"><span>${title}</span></div>` +
         `<div class="p-2 max-h-64 overflow-y-auto" style="scrollbar-width: thin">${gradesListHTML(grades)}</div>`;
 };
+
+Object.assign(OS, { metricScaleHTML, benchmarkBoxHTML, spotlightTooltipHTML, gradeTooltipHTML });
+})();

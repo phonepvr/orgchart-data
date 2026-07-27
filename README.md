@@ -18,7 +18,33 @@ To run locally, serve the folder with any static server, e.g.:
 python3 -m http.server 8000
 ```
 
-then open http://localhost:8000/.
+then open http://localhost:8000/. Opening `index.html` straight from disk
+(double-click / file share) also works.
+
+## Hosting on any static server
+
+Copy the whole folder — `index.html`, `favicon.svg`,
+`orglens_sample_template.xlsx`, and the `css/`, `js/` (including
+`js/render/`) and `vendor/` folders — to the web server, keeping the
+folder structure. There is nothing to install or configure: all scripts
+are ordinary (non-module) `<script>` tags, so they run even on servers
+that report a wrong Content-Type for `.js` files.
+
+**If the page comes up blank**, it now shows a built-in diagnostic box
+instead: `js/diag.js` lists exactly which files failed to load or which
+errors occurred. Typical causes:
+
+- a subfolder (`js/`, `js/render/`, `css/`, `vendor/`) was not uploaded
+  or not readable — the box lists the failing URLs;
+- the server sends `X-Content-Type-Options: nosniff` **and** serves `.js`
+  with a non-JavaScript Content-Type — ask IT to map `.js` to
+  `application/javascript`;
+- `vendor/xlsx.full.min.js` was stripped by a security filter (large
+  minified file) — re-upload it; without it the upload screen appears but
+  parsing fails.
+
+The Google Fonts links are optional — on a network that blocks them the
+app falls back to system fonts and everything still works.
 
 ## File map
 
@@ -30,6 +56,7 @@ vendor/xlsx.full.min.js      SheetJS 0.18.5 standalone (Excel parsing; only
 orglens_sample_template.xlsx sample data template offered on the upload screen
 js/
   harden.js                  prototype freeze — must load before the XLSX vendor script
+  diag.js                    blank-page diagnostics (fills the boot-fallback box)
   main.js                    boot, delegated event handling, actions, print lifecycle
   state.js                   central app state + derived data + region re-render dispatch
   constants.js               template schema, status styles, filter fields, print caps

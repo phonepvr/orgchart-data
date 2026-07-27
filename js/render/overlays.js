@@ -1,12 +1,11 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { esc, COMPARE_COLORS, icon, spotlightTooltipHTML, gradeTooltipHTML, state, derived } = OS;
 // Overlays: hover tooltips (spotlight + grade summaries) and the right-click
 // context menu. These live in fixed body-level layers (#info-tooltip-layer,
 // #grade-tooltip-layer, #context-menu-layer) that region re-renders never
 // touch — the vanilla equivalent of the former React portals.
-import { esc } from '../util.js';
-import { COMPARE_COLORS } from '../constants.js';
-import { icon } from '../icons.js';
-import { spotlightTooltipHTML, gradeTooltipHTML } from './spotlight.js';
-import { state, derived } from '../state.js';
 
 const infoLayer = () => document.getElementById('info-tooltip-layer');
 const gradeLayer = () => document.getElementById('grade-tooltip-layer');
@@ -20,7 +19,7 @@ const styleString = (style) => Object.entries(style)
     .join('; ');
 
 // --- Spotlight (info) tooltip ---
-export const showInfoTooltip = (empId, triggerEl) => {
+const showInfoTooltip = (empId, triggerEl) => {
     clearTimeout(hideTimeout);
     const employee = state.employeeMap[empId];
     if (!employee) return;
@@ -60,13 +59,13 @@ export const showInfoTooltip = (empId, triggerEl) => {
         `</div>`;
 };
 
-export const scheduleHideInfoTooltip = () => {
+const scheduleHideInfoTooltip = () => {
     hideTimeout = setTimeout(() => { infoLayer().innerHTML = ''; }, 200);
 };
-export const cancelHideInfoTooltip = () => clearTimeout(hideTimeout);
+const cancelHideInfoTooltip = () => clearTimeout(hideTimeout);
 
 // --- Grade summary tooltip ---
-export const showGradeTooltip = (empId, type, triggerEl) => {
+const showGradeTooltip = (empId, type, triggerEl) => {
     clearTimeout(hideGradeTimeout);
     const employee = state.employeeMap[empId];
     if (!employee) return;
@@ -101,18 +100,18 @@ export const showGradeTooltip = (empId, type, triggerEl) => {
         `</div>`;
 };
 
-export const scheduleHideGradeTooltip = () => {
+const scheduleHideGradeTooltip = () => {
     hideGradeTimeout = setTimeout(() => { gradeLayer().innerHTML = ''; }, 200);
 };
-export const cancelHideGradeTooltip = () => clearTimeout(hideGradeTimeout);
+const cancelHideGradeTooltip = () => clearTimeout(hideGradeTimeout);
 
-export const clearTooltips = () => {
+const clearTooltips = () => {
     infoLayer().innerHTML = '';
     gradeLayer().innerHTML = '';
 };
 
 // --- Right-click context menu (Add to Compare / Print Structure) ---
-export const renderContextMenu = () => {
+const renderContextMenu = () => {
     const cm = state.contextMenu;
     if (!cm) { menuLayer().innerHTML = ''; return; }
     menuLayer().innerHTML =
@@ -128,3 +127,6 @@ export const renderContextMenu = () => {
         `${icon('Printer', { size: 12 })} Print Structure</button>` +
         `</div>`;
 };
+
+Object.assign(OS, { showInfoTooltip, scheduleHideInfoTooltip, cancelHideInfoTooltip, showGradeTooltip, scheduleHideGradeTooltip, cancelHideGradeTooltip, clearTooltips, renderContextMenu });
+})();

@@ -1,10 +1,8 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { esc, NAME_STATUS_TINT, formatNum, icon, statusChipHTML, nameStatusChipHTML, state, derived } = OS;
 // Tabular view with sortable headers.
-import { esc } from '../util.js';
-import { NAME_STATUS_TINT } from '../constants.js';
-import { formatNum } from '../data.js';
-import { icon } from '../icons.js';
-import { statusChipHTML, nameStatusChipHTML } from './bits.js';
-import { state, derived } from '../state.js';
 
 const sortableHeaderHTML = ({ label, field, align = 'left', width = '' }) => {
     const config = state.sortConfigs.find(c => c.field === field);
@@ -39,7 +37,7 @@ const rowHTML = (emp) => {
         `</tr>`;
 };
 
-export const tableViewHTML = () => {
+const tableViewHTML = () => {
     const rows = derived.tabularSortedData;
     const body = rows.length === 0
         ? `<div class="p-10 text-center text-slate-500">No employees match your current filter conditions.</div>`
@@ -65,3 +63,6 @@ export const tableViewHTML = () => {
         `<h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">Filtered Results <span class="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">${rows.length} records</span></h2>` +
         `</div>` + body + `</div>`;
 };
+
+Object.assign(OS, { tableViewHTML });
+})();

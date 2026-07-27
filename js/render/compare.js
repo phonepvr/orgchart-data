@@ -1,9 +1,8 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { esc, COMPARE_COLORS, formatNum, sortEmployees, icon, state } = OS;
 // Compare view: color slots, individual context, organizational context.
-import { esc } from '../util.js';
-import { COMPARE_COLORS } from '../constants.js';
-import { formatNum, sortEmployees } from '../data.js';
-import { icon } from '../icons.js';
-import { state } from '../state.js';
 
 const coloredGradeListHTML = (gradesObj, textClass) => {
     if (!gradesObj || Object.keys(gradesObj).length === 0) {
@@ -104,7 +103,7 @@ const orgContextColumnHTML = (emp, employeeMap, ceoId) => {
         `</div>`;
 };
 
-export const compareViewHTML = () => {
+const compareViewHTML = () => {
     const { compareList, employeeMap, ceoId } = state;
 
     // Was a useEffect: fall back to the first populated color slot.
@@ -155,3 +154,6 @@ export const compareViewHTML = () => {
         indAccordion + orgAccordion +
         `</div></div></div>`;
 };
+
+Object.assign(OS, { compareViewHTML });
+})();

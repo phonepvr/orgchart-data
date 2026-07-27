@@ -1,15 +1,12 @@
+(function () {
+'use strict';
+const OS = window.OrgSense = window.OrgSense || {};
+const { esc, NAME_STATUS_TINT, NUMERIC_FIELDS, formatNum, icon, amnsMarkHTML, brandStrokeHTML, statusChipHTML, metricScaleHTML, state, derived } = OS;
 // App shell: lock screen, upload screen, header (tabs + search), data-verify
 // banner, sidebar (filters + cohort summaries), active-filter pills.
-import { esc } from '../util.js';
-import { NAME_STATUS_TINT, NUMERIC_FIELDS } from '../constants.js';
-import { formatNum } from '../data.js';
-import { icon } from '../icons.js';
-import { amnsMarkHTML, brandStrokeHTML, statusChipHTML } from './bits.js';
-import { metricScaleHTML } from './spotlight.js';
-import { state, derived } from '../state.js';
 
 // --- Lock screen (busy/error handled by direct DOM updates in main.js) ---
-export const lockScreenHTML = () =>
+const lockScreenHTML = () =>
     `<div class="h-screen w-full flex bg-white text-graphite-900 overflow-hidden">` +
     `<div class="hidden md:flex md:w-1/2 lg:w-3/5 bg-graphite-900 text-white flex-col justify-between p-12 lg:p-16 relative overflow-hidden">` +
     brandStrokeHTML('absolute top-0 right-0 h-32 w-64 opacity-90') +
@@ -46,7 +43,7 @@ export const lockScreenHTML = () =>
     `</div></div></div></div>`;
 
 // --- Upload screen ---
-export const uploadScreenHTML = () => {
+const uploadScreenHTML = () => {
     const templateHref = './orglens_sample_template.xlsx';
     const { loading, warnings, error } = state;
     return `<div class="h-screen w-full bg-graphite-50 flex flex-col">` +
@@ -103,7 +100,7 @@ const privacyChipHTML = () =>
     `</ul></div></div>`;
 
 // --- Header (app bar with tabs + search) ---
-export const searchResultsHTML = () => {
+const searchResultsHTML = () => {
     if (!(state.isSearchOpen && state.searchQuery)) return '';
     const results = derived.filteredSearch;
     return `<div class="absolute top-full right-0 mt-2 w-80 bg-white rounded-brand shadow-xl border border-graphite-100 overflow-hidden z-50">` +
@@ -122,7 +119,7 @@ export const searchResultsHTML = () => {
         `</div>`;
 };
 
-export const headerInnerHTML = () => {
+const headerInnerHTML = () => {
     const tabBtn = (tab, label, iconHtml = '') =>
         `<button data-action="tab" data-tab="${tab}" class="px-4 py-1.5 rounded-brand text-sm font-sans font-semibold transition-all flex items-center gap-1.5 ${state.appTab === tab ? 'bg-white text-red-600 shadow-sm' : 'text-graphite-500 hover:text-graphite-800'}">${iconHtml}${label}</button>`;
 
@@ -147,7 +144,7 @@ export const headerInnerHTML = () => {
 };
 
 // --- Data verify banner ---
-export const bannerHTML = () => {
+const bannerHTML = () => {
     if (!state.showDataVerifyBanner || state.data.length === 0) return '';
     const rowCount = state.data.length;
     return `<div class="bg-ember/10 border-b border-ember/40 px-6 py-2 flex items-center justify-between gap-4 print:hidden">` +
@@ -273,12 +270,12 @@ const cohortSummariesHTML = () => {
         scales + `</div>`;
 };
 
-export const sidebarClass = () => {
+const sidebarClass = () => {
     if (!(state.appTab === 'org' || state.appTab === 'table')) return 'hidden';
     return `${state.isSidebarOpen ? 'w-72 md:w-80' : 'w-12'} bg-white border-r border-slate-200 flex-shrink-0 flex flex-col relative transition-all duration-300 z-50 shadow-[2px_0_10px_rgba(0,0,0,0.05)] hidden sm:flex`;
 };
 
-export const sidebarInnerHTML = () => {
+const sidebarInnerHTML = () => {
     if (!(state.appTab === 'org' || state.appTab === 'table')) return '';
 
     const filterSection =
@@ -313,7 +310,7 @@ export const sidebarInnerHTML = () => {
 };
 
 // --- Active filter pills (sticky bar above the content) ---
-export const pillsBarHTML = () => {
+const pillsBarHTML = () => {
     if (!((state.appTab === 'org' || state.appTab === 'table') && state.filterConditions.length > 0)) return '';
     const pills = state.filterConditions.flatMap(cond => {
         const out = [];
@@ -341,3 +338,6 @@ export const pillsBarHTML = () => {
         `<button data-action="clear-filters" class="text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase tracking-wider ml-auto flex items-center gap-1 transition-colors">${icon('Trash2', { size: 12 })} Clear All</button>` +
         `</div>`;
 };
+
+Object.assign(OS, { lockScreenHTML, uploadScreenHTML, searchResultsHTML, headerInnerHTML, bannerHTML, sidebarClass, sidebarInnerHTML, pillsBarHTML });
+})();
