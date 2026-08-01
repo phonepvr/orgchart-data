@@ -376,56 +376,69 @@ const getCohortStats = (arr) => {
 
 // --- Print pagination (pure data) ---
 
-// Smart column count for the subject-page side panes (0-12 only; above that we paginate).
-const sideColumns = (n) => (n <= 4 ? 1 : 2);
+// Smart column count for the subject-page side panes. Panes are capped at
+// 3 tile rows (measured: 4 rows of realistic tiles overflow the A4 canvas).
+const sideColumns = (n) => (n <= 3 ? 1 : 2);
 
 // Direct-reports grid column count. With no matrix pane the DR side gets the
-// whole right half of the canvas, so widen toward ~4 rows (up to 3 cols) to
-// fill the space instead of overflowing vertically into an empty right margin.
-// With a matrix pane present the DR side is narrower, so cap at 2 cols.
+// whole right half of the canvas, so widen toward 3 cols to keep at most 3
+// rows. With a matrix pane present the DR side is narrower, so cap at 2 cols.
 const drColumns = (n, hasMatrix) => {
-    if (hasMatrix) return n <= 4 ? 1 : 2;
+    if (hasMatrix) return n <= 3 ? 1 : 2;
     if (n <= 2) return n || 1;   // 1-2 reports → 1-2 cols
-    if (n <= 8) return 2;        // 3-8 reports → 2 cols (≤4 rows)
-    return 3;                    // 9-12 reports → 3 cols (≤4 rows)
+    if (n <= 6) return 2;        // 3-6 reports → 2 cols (≤3 rows)
+    return 3;                    // 7-9 reports → 3 cols (≤3 rows)
 };
 
 // Pure function: split one subject's reports across a 'subject' page plus
-// 'continuation' pages. Returns a list of page descriptors:
-//   { kind, subject, drs, matrix, drStart, drTotal }
+// 'continuation' pages (direct-report overflow first, then matrix overflow).
+// Returns a list of page descriptors:
+//   { kind, mode, subject, drs, matrix, drStart, drTotal, matrixStart, matrixTotal }
 const planSubjectPages = (subject, employeeMap, ceoId) => {
     const drs = (subject._directs || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
     const matrix = (subject._matrix || []).map(id => employeeMap[id]).filter(Boolean).sort((a, b) => sortEmployees(a, b, ceoId));
 
-    // When there's no matrix the DR pane gets the whole canvas and fits more;
-    // when matrix is present the side panes share the canvas, so cap tighter.
-    const firstPageDrCap = matrix.length > 0 ? NORMAL_PAGE_CAP : NORMAL_PAGE_CAP + 4; // 12
-
-    // TODO: matrix overflow continuation is out of scope. If matrix.length
-    // exceeds NORMAL_PAGE_CAP the surplus is clipped by .print-page overflow.
-    // Extremely rare in current data; add matrix continuation pages if a real
-    // customer hits it.
+    // When there's no matrix the DR pane gets the whole canvas and fits more
+    // (3 cols x 3 rows); when matrix is present the side panes share the
+    // canvas, so cap tighter (2 cols x 3 rows each).
+    const firstPageDrCap = matrix.length > 0 ? NORMAL_PAGE_CAP : NORMAL_PAGE_CAP + 3; // 9
 
     const firstChunk = drs.slice(0, firstPageDrCap);
     const overflow = drs.slice(firstPageDrCap);
+    const firstMatrix = matrix.slice(0, NORMAL_PAGE_CAP);
+    const matrixOverflow = matrix.slice(NORMAL_PAGE_CAP);
 
     const pages = [{
         kind: 'subject',
         subject,
         drs: firstChunk,
-        matrix,
+        matrix: firstMatrix,
         drStart: 0,
         drTotal: drs.length,
+        matrixTotal: matrix.length,
     }];
 
     for (let i = 0; i < overflow.length; i += CONTINUATION_PAGE_CAP) {
         pages.push({
             kind: 'continuation',
+            mode: 'direct',
             subject,
             drs: overflow.slice(i, i + CONTINUATION_PAGE_CAP),
             matrix: [],
             drStart: firstPageDrCap + i,
             drTotal: drs.length,
+        });
+    }
+
+    for (let i = 0; i < matrixOverflow.length; i += CONTINUATION_PAGE_CAP) {
+        pages.push({
+            kind: 'continuation',
+            mode: 'matrix',
+            subject,
+            drs: [],
+            matrix: matrixOverflow.slice(i, i + CONTINUATION_PAGE_CAP),
+            matrixStart: NORMAL_PAGE_CAP + i,
+            matrixTotal: matrix.length,
         });
     }
     return pages;

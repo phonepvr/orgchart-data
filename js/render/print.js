@@ -19,7 +19,7 @@ const printTileHTML = (employee, { isMatrix = false, isLineManager = false } = {
 
     return `<div class="p-2 ${borderStyle} ${tintStyle} rounded-brand flex flex-col text-graphite-900 break-inside-avoid shadow-sm ${widthClass}" style="border-left: 4px solid ${ruleColor}">` +
         `<div class="flex justify-between items-start gap-1 mb-0.5">` +
-        `<div class="font-display font-medium text-[11px] leading-tight truncate pr-1 min-w-0 flex-1">${esc(employee._formattedName) || (nameTint ? nameTint.label : '')}</div>` +
+        `<div class="font-display font-medium text-[11px] leading-tight truncate pr-1 min-w-0 flex-1">${esc(employee.name) || (nameTint ? nameTint.label : '')}</div>` +
         (employee.level ? `<div class="text-[9px] font-mono font-semibold px-1 rounded-brand border border-graphite-300 whitespace-nowrap flex-shrink-0 bg-white">${esc(employee.level.split(' - ')[0])}</div>` : '') +
         `</div>` +
         `<div class="text-[9px] font-sans text-graphite-600 line-clamp-2 leading-snug" title="${esc(employee.jobTitle)}">${esc(employee.jobTitle || '')}</div>` +
@@ -41,16 +41,27 @@ const printTileHTML = (employee, { isMatrix = false, isLineManager = false } = {
         `</div>`;
 };
 
+// Capped so deep level taxonomies (M-1…M-18…) can't push the mid column
+// past the page bottom; the tail is summarized as one "+N more" row.
+const PRINT_GRADE_ROWS_MAX = 9;
+
 const printGradeListHTML = (gradesObj) => {
     if (!gradesObj) return '';
     const entries = Object.entries(gradesObj);
     if (entries.length === 0) return '';
     const sorted = entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    return `<div class="flex flex-col gap-y-0.5 text-[10px] font-sans">${sorted.map(([g, c]) =>
+    const shown = sorted.slice(0, PRINT_GRADE_ROWS_MAX);
+    const rest = sorted.slice(PRINT_GRADE_ROWS_MAX);
+    const restCount = rest.reduce((sum, [, c]) => sum + c, 0);
+    return `<div class="flex flex-col gap-y-0.5 text-[10px] font-sans">${shown.map(([g, c]) =>
         `<div class="flex justify-between items-center border-b border-graphite-100 pb-0.5">` +
         `<span class="text-graphite-600 font-medium truncate pr-1">${esc(g)}</span>` +
         `<span class="font-bold text-graphite-900 font-mono">${c}</span></div>`
-    ).join('')}</div>`;
+    ).join('')}${rest.length > 0
+        ? `<div class="flex justify-between items-center border-b border-graphite-100 pb-0.5">` +
+          `<span class="text-graphite-600 font-medium truncate pr-1">+${rest.length} more levels</span>` +
+          `<span class="font-bold text-graphite-900 font-mono">${restCount}</span></div>`
+        : ''}</div>`;
 };
 
 const printLegendHTML = () =>
@@ -105,27 +116,38 @@ const printLayoutHTML = (rootId, employeeMap, ceoId) => {
 
         const isLast = index === pages.length - 1;
 
+        const isMatrixCont = isContinuation && page.mode === 'matrix';
+        const contTiles = isMatrixCont ? pageMatrix : pageDrs;
+        const contStart = isMatrixCont ? page.matrixStart : page.drStart;
+        const contTotal = isMatrixCont ? page.matrixTotal : page.drTotal;
+
+        const overflowNotes = [];
+        if (!isContinuation) {
+            if (page.drTotal > pageDrs.length) overflowNotes.push(`Direct Reports: showing first ${pageDrs.length} of ${page.drTotal}`);
+            if ((page.matrixTotal || 0) > pageMatrix.length) overflowNotes.push(`Matrix Reports: showing first ${pageMatrix.length} of ${page.matrixTotal}`);
+        }
+
         const subHeader = isContinuation
             ? `<div class="w-full px-8 pt-3 pb-2 border-b border-graphite-100 flex items-end justify-between gap-4 flex-shrink-0">` +
               `<div class="min-w-0">` +
-              `<div class="font-sans uppercase tracking-[0.18em] text-[9px] text-red-600 font-semibold">Direct Reports · continued</div>` +
-              `<div class="font-display text-lg text-graphite-900 leading-tight truncate">${esc([emp._formattedName || (centralTint ? centralTint.label : ''), emp.jobTitle].filter(Boolean).join(' — '))}</div>` +
-              `<div class="font-sans text-[10px] text-graphite-500 mt-0.5">Showing reports ${page.drStart + 1}–${page.drStart + pageDrs.length} of ${page.drTotal}</div>` +
+              `<div class="font-sans uppercase tracking-[0.18em] text-[9px] text-red-600 font-semibold">${isMatrixCont ? 'Matrix Reports' : 'Direct Reports'} · continued</div>` +
+              `<div class="font-display text-lg text-graphite-900 leading-tight truncate">${esc([emp.name || (centralTint ? centralTint.label : ''), emp.jobTitle].filter(Boolean).join(' — '))}</div>` +
+              `<div class="font-sans text-[10px] text-graphite-500 mt-0.5">Showing reports ${contStart + 1}–${contStart + contTiles.length} of ${contTotal}</div>` +
               `</div>` + printLegendHTML() + `</div>`
             : `<div class="w-full px-8 pt-5 pb-2 border-b border-graphite-100 flex items-end justify-between gap-4 flex-shrink-0">` +
               `<div class="min-w-0">` +
               `<div class="font-sans uppercase tracking-[0.18em] text-[9px] text-red-600 font-semibold">Position structure</div>` +
-              `<div class="font-display text-2xl text-graphite-900 leading-tight truncate">${esc(emp._formattedName) || (centralTint ? centralTint.label : '')}</div>` +
+              `<div class="font-display text-2xl text-graphite-900 leading-tight truncate">${esc(emp.name) || (centralTint ? centralTint.label : '')}</div>` +
               `<div class="font-sans text-[11px] text-graphite-500 mt-0.5">${esc([emp.jobTitle, emp.function1, emp.location].filter(Boolean).join(' · '))}</div>` +
-              (page.drTotal > pageDrs.length
-                  ? `<div class="font-mono text-[9px] text-graphite-400 mt-0.5">Direct Reports: showing first ${pageDrs.length} of ${page.drTotal} · continues over</div>`
+              (overflowNotes.length > 0
+                  ? `<div class="font-mono text-[9px] text-graphite-400 mt-0.5">${overflowNotes.join(' · ')} · continues over</div>`
                   : '') +
               `</div>` + printLegendHTML() + `</div>`;
 
         const canvas = isContinuation
             ? `<div class="flex-1 py-6 px-8 flex justify-center items-start">` +
               `<div class="grid grid-cols-4 gap-3 justify-center">` +
-              pageDrs.map(d => `<div style="page-break-inside: avoid">${printTileHTML(d)}</div>`).join('') +
+              contTiles.map(d => `<div style="page-break-inside: avoid">${printTileHTML(d, { isMatrix: isMatrixCont })}</div>`).join('') +
               `</div></div>`
             : `<div class="flex-1 py-8 px-8 flex justify-center items-start">` +
               `<div class="flex gap-8 w-full items-start max-w-7xl justify-center">` +
@@ -144,7 +166,7 @@ const printLayoutHTML = (rootId, employeeMap, ceoId) => {
                   : '') +
               `<div class="w-full ${centralBg} rounded-brand p-3 mb-6 shadow-md border" style="border-left: 5px solid ${centralRule}">` +
               `<div class="flex justify-between items-start gap-1 mb-1">` +
-              `<div class="font-display font-medium text-lg leading-tight truncate text-graphite-900 min-w-0 flex-1">${esc(emp._formattedName) || (centralTint ? centralTint.label : '')}</div>` +
+              `<div class="font-display font-medium text-lg leading-tight truncate text-graphite-900 min-w-0 flex-1">${esc(emp.name) || (centralTint ? centralTint.label : '')}</div>` +
               (emp.level ? `<div class="text-[10px] font-mono font-semibold px-1.5 py-0.5 border border-graphite-400 rounded-brand whitespace-nowrap flex-shrink-0 bg-white">${esc(emp.level.split(' - ')[0])}</div>` : '') +
               `</div>` +
               `<div class="text-[11px] font-sans text-graphite-700 font-medium mb-1.5 truncate">${esc(emp.jobTitle)}</div>` +

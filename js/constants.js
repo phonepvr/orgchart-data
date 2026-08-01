@@ -51,6 +51,11 @@ const FILTER_FIELD_MAP = {
 const MULTI_SELECT_FIELDS = [...Object.keys(FILTER_FIELD_MAP), 'Cohort Tag', 'Mgmt Committee'];
 const NUMERIC_FIELDS = ['DR Size', 'Total Reportees', 'Team Size'];
 
+// The only Cohort Tag values an uploaded file may contain (blank is also
+// allowed). Enforced at upload time (main.js) and mirrored by the dropdown
+// in the sample template's Cohort Tags column.
+const ALLOWED_COHORT_TAGS = ['Active', 'WIP', 'Offered', 'Vacant', 'Approved', 'Unapproved', 'MC'];
+
 // Compare color slots (also safelisted as hover:ring-{id}-400 in the frozen CSS)
 const COMPARE_COLORS = [
     { id: 'blue', bg: 'bg-blue-500', text: 'text-blue-700', border: 'border-blue-500', light: 'bg-blue-50' },
@@ -61,18 +66,19 @@ const COMPARE_COLORS = [
 ];
 
 // --- Print layout constants ---
-// Deterministic per-page capacity budget (no DOM measurement).
-// A4 landscape inner area ~281x194mm; tile ~30mm tall + gap => ~4 rows/col.
-const NORMAL_PAGE_CAP = 8;        // subject page: 2 cols x 4 rows in the side pane
+// Deterministic per-page capacity budget (no DOM measurement). Measured with
+// realistic tiles (2-line titles + chips): 4 tile rows overflow the A4
+// canvas on subject pages, so side panes are budgeted at 3 rows.
+const NORMAL_PAGE_CAP = 6;        // subject page: 2 cols x 3 rows in the side pane
 const CONTINUATION_PAGE_CAP = 16; // continuation page: 4 cols x 4 rows full-width
 
 // How many subject levels below the print root get their own pages. Each
 // page shows its subject plus one level below, so the printed tree reaches
-// root (n) → n-1 → n-2 → n-3 with a depth of 2.
-const PRINT_SUBJECT_DEPTH = 2;
+// root (n) → n-1 → n-2 → n-3 → n-4 with a depth of 3.
+const PRINT_SUBJECT_DEPTH = 3;
 
 // Static class strings for print grid columns.
 const GRID_COLS = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' };
 
-Object.assign(OS, { REQUIRED_COLUMNS, RECOMMENDED_COLUMNS, OPTIONAL_COLUMNS, STATUS_STYLES, NAME_STATUS_TINT, ACCESS_HASH, FILTER_FIELD_MAP, MULTI_SELECT_FIELDS, NUMERIC_FIELDS, COMPARE_COLORS, NORMAL_PAGE_CAP, CONTINUATION_PAGE_CAP, PRINT_SUBJECT_DEPTH, GRID_COLS });
+Object.assign(OS, { REQUIRED_COLUMNS, RECOMMENDED_COLUMNS, OPTIONAL_COLUMNS, STATUS_STYLES, NAME_STATUS_TINT, ACCESS_HASH, FILTER_FIELD_MAP, MULTI_SELECT_FIELDS, NUMERIC_FIELDS, ALLOWED_COHORT_TAGS, COMPARE_COLORS, NORMAL_PAGE_CAP, CONTINUATION_PAGE_CAP, PRINT_SUBJECT_DEPTH, GRID_COLS });
 })();

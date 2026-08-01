@@ -2,8 +2,16 @@
 
 A single-page org-chart explorer for AM/NS India. Upload an Excel file with
 the employee template and browse the structure, filter/sort a table view,
-compare people side by side, and print A4-landscape position maps.
-All parsing happens in the browser — nothing is uploaded anywhere.
+compare people side by side, and print A4-landscape position maps (root
+down to n-4). All parsing happens in the browser — nothing is uploaded
+anywhere.
+
+**Cohort Tags policy:** the `Cohort Tags` column accepts only
+`Active, WIP, Offered, Vacant, Approved, Unapproved, MC` — or blank. The
+sample template enforces this with an in-cell dropdown, and the app rejects
+any upload containing other values, naming the exact rows at fault. To
+change the allowed list, edit `ALLOWED_COHORT_TAGS` in `js/constants.js`
+and refresh the dropdown in `orglens_sample_template.xlsx` to match.
 
 ## No build step
 

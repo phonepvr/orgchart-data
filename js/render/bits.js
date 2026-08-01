@@ -71,31 +71,21 @@ const gradesListHTML = (gradesObj) => {
     ).join('')}</div>`;
 };
 
-// Per the AM/NS brand sheet (section 04): 5 approved colorways. `light` and
-// `reverse` are kept as aliases for backwards compat with existing call sites.
-const AMNS_VARIANTS = {
-    'red-on-white':   { ink: 'text-graphite-900', sep: 'text-red-500',     sub: 'text-graphite-500' },
-    'black-on-white': { ink: 'text-graphite-900', sep: 'text-graphite-900', sub: 'text-graphite-500' },
-    'red-on-black':   { ink: 'text-white',         sep: 'text-red-500',     sub: 'text-graphite-300' },
-    'white-on-black': { ink: 'text-white',         sep: 'text-red-500',     sub: 'text-graphite-300' },
-    'white-on-red':   { ink: 'text-white',         sep: 'text-graphite-900', sub: 'text-white/80'    },
-    light:            { ink: 'text-graphite-900', sep: 'text-red-500',     sub: 'text-graphite-500' },
-    reverse:          { ink: 'text-white',         sep: 'text-red-500',     sub: 'text-graphite-300' },
-};
-
+// AM/NS INDIA logo — two stacked lines, Smart Red on every background
+// (red-on-white / red-on-black are the brand's permitted colorways).
+// The `variant` parameter is kept so existing call sites don't change.
 const amnsMarkHTML = (size = 'md', variant = 'light') => {
     const sizes = {
-        sm: { mark: 'text-xl', sub: 'text-[8px]', gap: 'mt-0' },
-        md: { mark: 'text-3xl', sub: 'text-[9px]', gap: 'mt-1' },
-        lg: { mark: 'text-5xl', sub: 'text-[10px]', gap: 'mt-1.5' },
-        xl: { mark: 'text-6xl', sub: 'text-[11px]', gap: 'mt-2' },
+        sm: { mark: 'text-xl', gap: 'mt-0' },
+        md: { mark: 'text-3xl', gap: 'mt-0' },
+        lg: { mark: 'text-5xl', gap: 'mt-1' },
+        xl: { mark: 'text-6xl', gap: 'mt-1' },
     }[size];
-    const v = AMNS_VARIANTS[variant] || AMNS_VARIANTS.light;
     return `<div class="flex flex-col">` +
-        `<div class="font-display font-bold leading-none tracking-tight ${v.ink} ${sizes.mark}">` +
-        `<span>AM</span><span class="${v.sep} px-0.5">/</span><span>NS</span></div>` +
-        `<div class="${sizes.gap} ${sizes.sub} font-sans font-semibold uppercase tracking-[0.18em] ${v.sub}">` +
-        `ArcelorMittal Nippon Steel India</div></div>`;
+        `<div class="font-display font-bold leading-none tracking-tight text-red-500 ${sizes.mark}">` +
+        `<span>AM</span><span class="px-0.5">/</span><span>NS</span></div>` +
+        `<div class="${sizes.gap} font-display font-bold leading-none tracking-tight text-red-500 ${sizes.mark}">` +
+        `INDIA</div></div>`;
 };
 
 // Section 06 of the brand sheet — forward-diagonal accent. Smart Red by

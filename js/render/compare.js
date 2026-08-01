@@ -123,8 +123,8 @@ const compareViewHTML = () => {
     }
 
     const tabs = COMPARE_COLORS.map(c =>
-        `<button data-action="compare-tab" data-color="${c.id}" class="w-10 h-10 rounded-lg border-2 ${activeColor === c.id ? c.border : 'border-transparent'} ${c.bg} opacity-80 hover:opacity-100 relative transition-all">` +
-        (compareList[c.id].length > 0 ? `<span class="absolute -top-2 -right-2 bg-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center text-slate-800 shadow-md border border-slate-100">${compareList[c.id].length}</span>` : '') +
+        `<button data-action="compare-tab" data-color="${c.id}" class="w-6 h-6 rounded-md border-2 ${activeColor === c.id ? c.border : 'border-transparent'} ${c.bg} opacity-80 hover:opacity-100 relative transition-all">` +
+        (compareList[c.id].length > 0 ? `<span class="absolute -top-1.5 -right-1 bg-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center text-slate-800 shadow-md border border-slate-100">${compareList[c.id].length}</span>` : '') +
         `</button>`
     ).join('');
 
@@ -146,7 +146,7 @@ const compareViewHTML = () => {
 
     return `<div class="w-full h-full flex flex-col overflow-hidden print:hidden bg-white rounded-xl shadow-sm border border-slate-200 min-h-0">` +
         `<div class="flex justify-between items-center px-6 py-4 border-b border-slate-100 flex-shrink-0">` +
-        `<div class="flex gap-3 bg-slate-50 p-1.5 rounded-xl border border-slate-200">${tabs}</div></div>` +
+        `<div class="flex gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">${tabs}</div></div>` +
         `<div class="flex-1 overflow-auto w-full bg-slate-50" style="scrollbar-width: thin">` +
         `<div class="flex flex-col p-6 pt-0 w-max mx-auto min-h-full">` +
         `<div class="sticky top-0 z-30 flex gap-6 pb-4 pt-6 bg-slate-50 border-b border-slate-200/50 mb-4 shadow-[0_4px_6px_-1px_rgb(248,250,252)]">` +

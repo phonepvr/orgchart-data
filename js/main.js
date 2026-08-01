@@ -1,7 +1,7 @@
 (function () {
 'use strict';
 const OS = window.OrgSense = window.OrgSense || {};
-const { state, renderers, render, refreshDerived, sha256Hex, validateHeaders, processEmployeeData, defaultsForField, ACCESS_HASH, lockScreenHTML, uploadScreenHTML, headerInnerHTML, searchResultsHTML, bannerHTML, sidebarClass, sidebarInnerHTML, pillsBarHTML, orgViewHTML, tableViewHTML, compareViewHTML, printLayoutHTML, showInfoTooltip, scheduleHideInfoTooltip, cancelHideInfoTooltip, showGradeTooltip, scheduleHideGradeTooltip, cancelHideGradeTooltip, clearTooltips, renderContextMenu, avatarErrorFallback } = OS;
+const { state, renderers, render, refreshDerived, sha256Hex, validateHeaders, processEmployeeData, defaultsForField, ACCESS_HASH, ALLOWED_COHORT_TAGS, splitSemicolonList, lockScreenHTML, uploadScreenHTML, headerInnerHTML, searchResultsHTML, bannerHTML, sidebarClass, sidebarInnerHTML, pillsBarHTML, orgViewHTML, tableViewHTML, compareViewHTML, printLayoutHTML, showInfoTooltip, scheduleHideInfoTooltip, cancelHideInfoTooltip, showGradeTooltip, scheduleHideGradeTooltip, cancelHideGradeTooltip, clearTooltips, renderContextMenu, avatarErrorFallback } = OS;
 // Boot + event wiring. All interactions are delegated document-level
 // listeners resolving data-action / data-input / data-change attributes, so
 // region re-renders never need listener bookkeeping.
@@ -155,6 +155,28 @@ async function handleFileUpload(file) {
             return eid && !labelMarkers.has(eid);
         });
         if (cleanedData.length === 0) throw new Error("No employee rows found after parsing.");
+
+        // Cohort Tags gate: only the agreed values (or blank) are accepted.
+        // Anything else rejects the whole file with the exact rows at fault.
+        const badTags = [];
+        rawData.forEach((row, i) => {
+            const eid = String(row["Employee's Position Code"] || '').trim().toLowerCase();
+            if (!eid || labelMarkers.has(eid)) return; // skip the template's category row
+            splitSemicolonList(row['Cohort Tags']).forEach(tag => {
+                if (!ALLOWED_COHORT_TAGS.includes(tag)) {
+                    badTags.push(`"${tag}" (row ${i + 2})`); // +2 = header row + 1-based
+                }
+            });
+        });
+        if (badTags.length > 0) {
+            const shown = badTags.slice(0, 8).join(', ');
+            const more = badTags.length > 8 ? ` and ${badTags.length - 8} more` : '';
+            throw new Error(
+                `Upload rejected — invalid Cohort Tag value${badTags.length > 1 ? 's' : ''}: ${shown}${more}. ` +
+                `Allowed values are ${ALLOWED_COHORT_TAGS.join(', ')} (or blank). ` +
+                `Please correct the file and upload it again.`);
+        }
+
         const w = [];
         if (validation.missingRecommended.length > 0) {
             w.push(`Missing recommended column${validation.missingRecommended.length > 1 ? 's' : ''}: ${validation.missingRecommended.join(', ')}. Some UI elements will be hidden.`);

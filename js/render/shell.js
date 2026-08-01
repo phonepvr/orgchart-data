@@ -76,7 +76,9 @@ const uploadScreenHTML = () => {
         `<span class="font-mono uppercase tracking-wider text-graphite-700">Required:</span> ` +
         `<span class="font-mono">Employee&#39;s Position Code</span>, ` +
         `<span class="font-mono">Employee name</span>, ` +
-        `<span class="font-mono">Line Manager&#39;s Position Code</span>. Every other column is optional and missing fields are simply hidden in the UI.</p></div>` +
+        `<span class="font-mono">Line Manager&#39;s Position Code</span>. Every other column is optional and missing fields are simply hidden in the UI. ` +
+        `<span class="font-mono uppercase tracking-wider text-graphite-700">Cohort Tags:</span> only ` +
+        `<span class="font-mono">Active, WIP, Offered, Vacant, Approved, Unapproved, MC</span> (or blank) are accepted — anything else rejects the file.</p></div>` +
         (warnings && warnings.length > 0 ? warnings.map(w => `<p class="text-ember text-xs font-sans">${esc(w)}</p>`).join('') : '') +
         (error ? `<p class="text-red-700 text-sm font-sans font-semibold">${esc(error)}</p>` : '') +
         `</div></div>` +
