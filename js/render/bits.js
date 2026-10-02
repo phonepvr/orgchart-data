@@ -71,10 +71,10 @@ const gradesListHTML = (gradesObj) => {
     ).join('')}</div>`;
 };
 
-// AM/NS INDIA logo — two stacked lines, Smart Red on every background
+// Brand logo — two stacked lines, Smart Red on every background
 // (red-on-white / red-on-black are the brand's permitted colorways).
 // The `variant` parameter is kept so existing call sites don't change.
-const amnsMarkHTML = (size = 'md', variant = 'light') => {
+const brandMarkHTML = (size = 'md', variant = 'light') => {
     const sizes = {
         sm: { mark: 'text-xl', gap: 'mt-0' },
         md: { mark: 'text-3xl', gap: 'mt-0' },
@@ -98,5 +98,5 @@ const brandStrokeHTML = (className = '', tone = 'red') => {
         `<polygon fill="${fill}" points="80,0 110,0 90,40 60,40"/></svg>`;
 };
 
-Object.assign(OS, { statusChipHTML, nameStatusChipHTML, avatarHTML, avatarErrorFallback, gradesListHTML, amnsMarkHTML, brandStrokeHTML });
+Object.assign(OS, { statusChipHTML, nameStatusChipHTML, avatarHTML, avatarErrorFallback, gradesListHTML, brandMarkHTML, brandStrokeHTML });
 })();

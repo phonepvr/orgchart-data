@@ -2,8 +2,7 @@
 'use strict';
 const OS = window.OrgSense = window.OrgSense || {};
 // Inline SVG icon map — extracted from lucide-react 0.577.0 icon
-// definitions so the vanilla app renders byte-identical icons. Regenerate with
-// scripts note in the repo README if icons are ever added.
+// definitions so the vanilla app renders byte-identical icons.
 const ICON_PATHS = {
   Upload: '<path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>',
   Search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',

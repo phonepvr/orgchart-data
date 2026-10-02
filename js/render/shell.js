@@ -1,7 +1,7 @@
 (function () {
 'use strict';
 const OS = window.OrgSense = window.OrgSense || {};
-const { esc, NAME_STATUS_TINT, NUMERIC_FIELDS, formatNum, icon, amnsMarkHTML, brandStrokeHTML, statusChipHTML, metricScaleHTML, state, derived } = OS;
+const { esc, NAME_STATUS_TINT, NUMERIC_FIELDS, formatNum, icon, brandMarkHTML, brandStrokeHTML, statusChipHTML, metricScaleHTML, state, derived } = OS;
 // App shell: lock screen, upload screen, header (tabs + search), data-verify
 // banner, sidebar (filters + cohort summaries), active-filter pills.
 
@@ -11,7 +11,7 @@ const uploadScreenHTML = () => {
     const { loading, warnings, error } = state;
     return `<div class="h-screen w-full bg-graphite-50 flex flex-col">` +
         `<header class="px-8 py-5 border-b border-graphite-100 bg-white flex items-center justify-between flex-shrink-0">` +
-        amnsMarkHTML('sm') +
+        brandMarkHTML('sm') +
         `<div class="flex items-center gap-4">` +
         brandStrokeHTML('h-5 w-16 hidden md:inline-block') +
         `<span class="font-mono text-[10px] text-graphite-400 hidden md:inline">Org Sense · v1.0</span></div></header>` +
@@ -21,7 +21,7 @@ const uploadScreenHTML = () => {
         `<h1 class="font-display font-bold text-4xl md:text-5xl text-graphite-900 leading-[1.1] mb-3">` +
         `Upload your <span class="text-red-500">organisation file.</span></h1>` +
         `<p class="font-sans text-graphite-500 text-[15px] leading-relaxed mb-8 max-w-xl">` +
-        `Drop in the AM/NS sample template populated with your employee data, or any Excel file with the same headers. Parsing happens in this browser — nothing is uploaded, and a refresh clears everything.</p>` +
+        `Drop in the sample template populated with your employee data, or any Excel file with the same headers. Parsing happens in this browser — nothing is uploaded, and a refresh clears everything.</p>` +
         `<div id="dropzone" class="bg-white p-10 border border-graphite-200 rounded-brand transition-colors duration-brand-fast">` +
         `<div class="flex flex-col items-start gap-5">` +
         `<div class="w-12 h-12 bg-red-50 text-red-600 rounded-brand flex items-center justify-center border border-red-100">${icon('Upload', { size: 22 })}</div>` +
@@ -101,7 +101,7 @@ const headerInnerHTML = () => {
               : '')
         : '';
 
-    return `<div class="flex items-center gap-3 w-1/3">${amnsMarkHTML('sm')}${privacyChipHTML()}</div>` +
+    return `<div class="flex items-center gap-3 w-1/3">${brandMarkHTML('sm')}${privacyChipHTML()}</div>` +
         `<div class="flex bg-graphite-50 p-1 rounded-brand border border-graphite-100 w-fit mx-auto justify-center">` +
         tabBtn('org', 'Structure') + tabBtn('table', 'Table') + tabBtn('compare', 'Compare', icon('BarChart2', { size: 14 }) + ' ') +
         `</div>` +
