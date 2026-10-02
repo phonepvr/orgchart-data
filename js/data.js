@@ -211,12 +211,6 @@ const normalizeRow = (row) => {
     };
 };
 
-const sha256Hex = async (text) => {
-    const buf = new TextEncoder().encode(text);
-    const hashBuf = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
-};
-
 // --- Employee graph construction + insights ---
 // Returns { data, employeeMap, ceoId } instead of setting React state.
 const processEmployeeData = (rawData) => {
@@ -459,5 +453,5 @@ const collectPrintSubjects = (emp, depth, employeeMap, ceoId) => {
     return subjects;
 };
 
-Object.assign(OS, { formatNum, formatJobTitle, splitSemicolonList, buildInitials, deriveAge, sortEmployees, getMedian, toProperCase, formatDisplayFirstLast, parseExcelDate, formatDuration, isEA, validateHeaders, deriveNameStatus, normalizeCurrentStatus, normalizeRow, sha256Hex, processEmployeeData, getCohortStats, sideColumns, drColumns, planSubjectPages, collectPrintSubjects });
+Object.assign(OS, { formatNum, formatJobTitle, splitSemicolonList, buildInitials, deriveAge, sortEmployees, getMedian, toProperCase, formatDisplayFirstLast, parseExcelDate, formatDuration, isEA, validateHeaders, deriveNameStatus, normalizeCurrentStatus, normalizeRow, processEmployeeData, getCohortStats, sideColumns, drColumns, planSubjectPages, collectPrintSubjects });
 })();

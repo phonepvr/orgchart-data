@@ -28,14 +28,6 @@ const NAME_STATUS_TINT = {
     unapproved: { card: 'bg-signal/20 border-signal/60 text-graphite-900',    printTile: 'bg-[#D2E3F2] border-[#1B5EA6]',   label: 'Unapproved' },
 };
 
-// --- Access Gate ---
-// SHA-256 of the access password. Default: "amns2026".
-// To change: run `node -e "console.log(require('crypto').createHash('sha256').update('NEWPASS').digest('hex'))"`
-// and replace this constant. NOTE: this is client-side obfuscation, not real
-// authentication — anyone with devtools can read the source. Use it to gate the
-// public Pages URL from casual visitors, not to protect sensitive data.
-const ACCESS_HASH = 'bc321ef4abcfa473576619373b465dd491e5bced3b34b0b22dd1d54786b46f58';
-
 // --- Filter Field Definitions ---
 const FILTER_FIELD_MAP = {
     'Current Status/Tag': 'currentStatus',
@@ -80,5 +72,5 @@ const PRINT_SUBJECT_DEPTH = 3;
 // Static class strings for print grid columns.
 const GRID_COLS = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' };
 
-Object.assign(OS, { REQUIRED_COLUMNS, RECOMMENDED_COLUMNS, OPTIONAL_COLUMNS, STATUS_STYLES, NAME_STATUS_TINT, ACCESS_HASH, FILTER_FIELD_MAP, MULTI_SELECT_FIELDS, NUMERIC_FIELDS, ALLOWED_COHORT_TAGS, COMPARE_COLORS, NORMAL_PAGE_CAP, CONTINUATION_PAGE_CAP, PRINT_SUBJECT_DEPTH, GRID_COLS });
+Object.assign(OS, { REQUIRED_COLUMNS, RECOMMENDED_COLUMNS, OPTIONAL_COLUMNS, STATUS_STYLES, NAME_STATUS_TINT, FILTER_FIELD_MAP, MULTI_SELECT_FIELDS, NUMERIC_FIELDS, ALLOWED_COHORT_TAGS, COMPARE_COLORS, NORMAL_PAGE_CAP, CONTINUATION_PAGE_CAP, PRINT_SUBJECT_DEPTH, GRID_COLS });
 })();

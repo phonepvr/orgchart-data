@@ -101,17 +101,6 @@ names, so **only class names that already appear in `css/app.css` will
 have any effect**. If you need a class that is missing, append a small
 hand-written rule at the end of `css/app.css`.
 
-## Changing the access password
-
-The lock screen compares a SHA-256 hash. Set a new one in
-`js/constants.js` (`ACCESS_HASH`):
-
-```
-node -e "console.log(require('crypto').createHash('sha256').update('NEWPASS').digest('hex'))"
-```
-
-Note this is client-side obfuscation to keep casual visitors out of a
-public Pages URL — not real authentication.
 
 ## Deploying
 

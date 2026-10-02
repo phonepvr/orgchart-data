@@ -10,7 +10,6 @@ const { sortEmployees, computeAllUniqueByField, computeAvailableFilterFields, se
 // single-digit milliseconds, so there is no fine-grained DOM diffing.
 
 const state = {
-    unlocked: false,
     appTab: 'org', // 'org', 'table', 'compare'
     data: [],
     employeeMap: {},

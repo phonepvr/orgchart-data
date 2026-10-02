@@ -5,43 +5,6 @@ const { esc, NAME_STATUS_TINT, NUMERIC_FIELDS, formatNum, icon, amnsMarkHTML, br
 // App shell: lock screen, upload screen, header (tabs + search), data-verify
 // banner, sidebar (filters + cohort summaries), active-filter pills.
 
-// --- Lock screen (busy/error handled by direct DOM updates in main.js) ---
-const lockScreenHTML = () =>
-    `<div class="h-screen w-full flex bg-white text-graphite-900 overflow-hidden">` +
-    `<div class="hidden md:flex md:w-1/2 lg:w-3/5 bg-graphite-900 text-white flex-col justify-between p-12 lg:p-16 relative overflow-hidden">` +
-    brandStrokeHTML('absolute top-0 right-0 h-32 w-64 opacity-90') +
-    `<div class="relative z-10">${amnsMarkHTML('md', 'reverse')}</div>` +
-    `<div class="relative z-10 max-w-xl">` +
-    `<p class="font-sans font-semibold text-red-400 text-[11px] uppercase tracking-[0.18em] mb-5">#SmarterSteelsBrighterFutures</p>` +
-    `<h1 class="font-sans font-bold uppercase tracking-[0.08em] text-5xl lg:text-6xl leading-[1.05] mb-4">` +
-    `Smarter Steels<span class="text-red-500">.</span><br>Brighter Futures<span class="text-red-500">.</span></h1>` +
-    `<p class="font-sans italic text-graphite-300 text-2xl lg:text-3xl leading-snug">Reimagineering Bharat.</p></div>` +
-    `<div class="relative z-10 flex items-end justify-between text-graphite-300">` +
-    `<p class="font-sans text-xs leading-relaxed max-w-xs">Banaunga main, banega Bharat.<br>` +
-    `<span class="text-graphite-400">JV between ArcelorMittal &amp; Nippon Steel — 9 MTPA across India.</span></p>` +
-    `<span class="font-mono text-[10px] text-graphite-400 hidden lg:inline">Org Sense · v1.0</span></div>` +
-    `<div aria-hidden="true" class="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-red-600 opacity-20 blur-3xl"></div>` +
-    `</div>` +
-    `<div class="flex-1 flex flex-col items-center justify-center p-8 lg:p-16 bg-graphite-50">` +
-    `<div class="md:hidden mb-10">${amnsMarkHTML('md')}</div>` +
-    `<div class="w-full max-w-sm">` +
-    `<p class="font-sans font-semibold text-red-600 text-[11px] uppercase tracking-[0.18em] mb-3">Restricted access</p>` +
-    `<h2 class="font-display text-3xl text-graphite-900 mb-3 leading-tight">Sign in to Org Sense.</h2>` +
-    `<p class="font-sans text-graphite-500 text-[15px] leading-relaxed mb-8">For authorised AM/NS personnel only. Enter the access password issued by the People &amp; Culture team to continue.</p>` +
-    `<form id="lock-form" class="flex flex-col gap-3">` +
-    `<input type="password" id="lock-pwd" autofocus autocomplete="off"` +
-    ` class="w-full px-4 py-3 bg-white border border-graphite-200 rounded-brand focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 font-mono tracking-wider text-graphite-900 transition-colors duration-brand-fast"` +
-    ` placeholder="Access password">` +
-    `<p id="lock-err" class="text-red-700 text-sm font-medium hidden" role="alert"></p>` +
-    `<button type="submit" id="lock-submit" disabled` +
-    ` class="w-full py-3 rounded-brand font-sans font-semibold text-white tracking-wide transition-colors duration-brand-fast inline-flex items-center justify-center gap-2 bg-graphite-300 cursor-not-allowed">` +
-    `Unlock <span aria-hidden="true">→</span></button>` +
-    `</form>` +
-    `<div class="mt-10 pt-6 border-t border-graphite-200">` +
-    `<p class="font-sans text-[11px] text-graphite-500 leading-relaxed">` +
-    `<span class="font-semibold text-graphite-700">Privacy.</span> Your spreadsheet is parsed in this browser tab and lives in memory only — no upload, no localStorage, no analytics, no third-party requests. Refresh or close the tab and the data is gone; you&rsquo;ll need to re-upload to continue.</p>` +
-    `</div></div></div></div>`;
-
 // --- Upload screen ---
 const uploadScreenHTML = () => {
     const templateHref = './orglens_sample_template.xlsx';
@@ -341,5 +304,5 @@ const pillsBarHTML = () => {
         `</div>`;
 };
 
-Object.assign(OS, { lockScreenHTML, uploadScreenHTML, searchResultsHTML, headerInnerHTML, bannerHTML, sidebarClass, sidebarInnerHTML, pillsBarHTML });
+Object.assign(OS, { uploadScreenHTML, searchResultsHTML, headerInnerHTML, bannerHTML, sidebarClass, sidebarInnerHTML, pillsBarHTML });
 })();

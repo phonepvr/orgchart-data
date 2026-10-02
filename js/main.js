@@ -1,14 +1,14 @@
 (function () {
 'use strict';
 const OS = window.OrgSense = window.OrgSense || {};
-const { state, renderers, render, refreshDerived, sha256Hex, validateHeaders, processEmployeeData, defaultsForField, ACCESS_HASH, ALLOWED_COHORT_TAGS, splitSemicolonList, lockScreenHTML, uploadScreenHTML, headerInnerHTML, searchResultsHTML, bannerHTML, sidebarClass, sidebarInnerHTML, pillsBarHTML, orgViewHTML, tableViewHTML, compareViewHTML, printLayoutHTML, showInfoTooltip, scheduleHideInfoTooltip, cancelHideInfoTooltip, showGradeTooltip, scheduleHideGradeTooltip, cancelHideGradeTooltip, clearTooltips, renderContextMenu, avatarErrorFallback } = OS;
+const { state, renderers, render, refreshDerived, validateHeaders, processEmployeeData, defaultsForField, ALLOWED_COHORT_TAGS, splitSemicolonList, uploadScreenHTML, headerInnerHTML, searchResultsHTML, bannerHTML, sidebarClass, sidebarInnerHTML, pillsBarHTML, orgViewHTML, tableViewHTML, compareViewHTML, printLayoutHTML, showInfoTooltip, scheduleHideInfoTooltip, cancelHideInfoTooltip, showGradeTooltip, scheduleHideGradeTooltip, cancelHideGradeTooltip, clearTooltips, renderContextMenu, avatarErrorFallback } = OS;
 // Boot + event wiring. All interactions are delegated document-level
 // listeners resolving data-action / data-input / data-change attributes, so
 // region re-renders never need listener bookkeeping.
 /* global XLSX */
 
 const root = document.getElementById('root');
-let currentScreen = null; // 'lock' | 'upload' | 'app'
+let currentScreen = null; // 'upload' | 'app'
 let nextCondId = 1;
 let resetTableScroll = false;
 
@@ -26,14 +26,11 @@ const appShellHTML = () =>
     `</div>`;
 
 function renderScreen() {
-    const target = !state.unlocked ? 'lock' : (state.data.length === 0 ? 'upload' : 'app');
+    const target = state.data.length === 0 ? 'upload' : 'app';
     if (target !== currentScreen) {
         currentScreen = target;
         clearTooltips();
-        if (target === 'lock') {
-            root.innerHTML = lockScreenHTML();
-            wireLockScreen();
-        } else if (target === 'upload') {
+        if (target === 'upload') {
             root.innerHTML = uploadScreenHTML();
         } else {
             root.innerHTML = appShellHTML();
@@ -516,45 +513,6 @@ function wireGlobalListeners() {
             render('print');
         }
     });
-}
-
-// --- Lock screen wiring (local DOM state, no region re-render) ---
-function wireLockScreen() {
-    const form = document.getElementById('lock-form');
-    const pwd = document.getElementById('lock-pwd');
-    const btn = document.getElementById('lock-submit');
-    const err = document.getElementById('lock-err');
-    const setBtn = (busy) => {
-        const enabled = !busy && !!pwd.value;
-        btn.disabled = !enabled;
-        btn.className = `w-full py-3 rounded-brand font-sans font-semibold text-white tracking-wide transition-colors duration-brand-fast inline-flex items-center justify-center gap-2 ${enabled ? 'bg-red-600 hover:bg-red-700 cursor-pointer' : 'bg-graphite-300 cursor-not-allowed'}`;
-        btn.innerHTML = busy ? 'Verifying…' : 'Unlock <span aria-hidden="true">→</span>';
-        pwd.disabled = busy;
-    };
-    pwd.addEventListener('input', () => { err.classList.add('hidden'); setBtn(false); });
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (!pwd.value) return;
-        setBtn(true);
-        err.classList.add('hidden');
-        try {
-            const hash = await sha256Hex(pwd.value);
-            if (hash === ACCESS_HASH) {
-                state.unlocked = true;
-                renderScreen();
-                return;
-            }
-            err.textContent = 'Incorrect password.';
-            err.classList.remove('hidden');
-            pwd.value = '';
-        } catch (ex) {
-            err.textContent = 'Password check failed: ' + ex.message;
-            err.classList.remove('hidden');
-        }
-        setBtn(false);
-        pwd.focus();
-    });
-    pwd.focus();
 }
 
 // --- Boot ---
